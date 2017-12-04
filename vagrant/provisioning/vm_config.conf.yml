@@ -1,6 +1,7 @@
 ---
 public_network: "10.10.0.0/24"
 public_gateway: "10.10.0.1"
+public_vbox_net: "ovn_public_net"
 k8smaster:
   short_name: "k8smaster"
   host_name: "k8smaster.ovn"
