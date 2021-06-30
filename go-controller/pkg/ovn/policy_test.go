@@ -11,10 +11,13 @@ import (
 	"github.com/onsi/gomega"
 
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/nbdb"
 	addressset "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/address_set"
 	ovntest "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/testing"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/testing/libovsdb"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/types"
-	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
+
+	//"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
 	"github.com/urfave/cli/v2"
 
 	v1 "k8s.io/api/core/v1"
@@ -227,31 +230,14 @@ func (p multicastPolicy) enableCmds(fExec *ovntest.FakeExec, ns string) {
 	})
 }
 
-func (p multicastPolicy) disableCmds(fExec *ovntest.FakeExec, ns string) {
+func (p multicastPolicy) getACLMatch(ns string) (ingressMatch, egressMatch string) {
 	pg_hash := hashedPortGroup(ns)
-
-	match := getACLMatch(pg_hash, getMulticastACLEgrMatch(), knet.PolicyTypeEgress)
-	fExec.AddFakeCmd(&ovntest.ExpectedCmd{
-		Cmd: "ovn-nbctl --timeout=15 --data=bare --no-heading --columns=_uuid find ACL " +
-			match + " " + "action=allow external-ids:default-deny-policy-type=Egress",
-		Output: "fake_uuid",
-	})
-	fExec.AddFakeCmdsNoOutputNoError([]string{
-		"ovn-nbctl --timeout=15 remove port_group " + pg_hash + " acls fake_uuid",
-	})
+	egressMatch = getACLMatch(pg_hash, getMulticastACLEgrMatch(), knet.PolicyTypeEgress)
 
 	ip4AddressSet, ip6AddressSet := addressset.MakeAddressSetHashNames(ns)
-	mcastMatch := getACLMatchAF(getMulticastACLIgrMatchV4(ip4AddressSet),
-		getMulticastACLIgrMatchV6(ip6AddressSet))
-	match = getACLMatch(pg_hash, mcastMatch, knet.PolicyTypeIngress)
-	fExec.AddFakeCmd(&ovntest.ExpectedCmd{
-		Cmd: "ovn-nbctl --timeout=15 --data=bare --no-heading --columns=_uuid find ACL " +
-			match + " " + "action=allow external-ids:default-deny-policy-type=Ingress",
-		Output: "fake_uuid",
-	})
-	fExec.AddFakeCmdsNoOutputNoError([]string{
-		"ovn-nbctl --timeout=15 remove port_group " + pg_hash + " acls fake_uuid",
-	})
+	mcastMatch := getACLMatchAF(getMulticastACLIgrMatchV4(ip4AddressSet), getMulticastACLIgrMatchV6(ip6AddressSet))
+	ingressMatch = getACLMatch(pg_hash, mcastMatch, knet.PolicyTypeIngress)
+	return
 }
 
 var _ = ginkgo.Describe("OVN NetworkPolicy Operations with IP Address Family", func() {
@@ -312,18 +298,59 @@ var _ = ginkgo.Describe("OVN NetworkPolicy Operations with IP Address Family", f
 
 					// Enable multicast in the namespace.
 					mcastPolicy := multicastPolicy{}
-					mcastPolicy.enableCmds(fExec, namespace1.Name)
+					ingressMatch, egressMatch := mcastPolicy.getACLMatch(namespace1.Name)
+					expectedData := []libovsdb.TestData{
+						&nbdb.ACL{
+							UUID:      namespace1.Name + "_MulticastAllowEgress",
+							Name:      []string{namespace1.Name + "_MulticastAllowEgress"},
+							Priority:  1012,
+							Direction: nbdb.ACLDirectionFromLport,
+							Match:     egressMatch,
+							Action:    nbdb.ACLActionAllow,
+							Log:       false,
+							Meter:     []string{"acl-logging"},
+							Severity:  []string{nbdb.ACLSeverityInfo},
+							ExternalIDs: map[string]string{
+								"default-deny-policy-type": "Egress",
+							},
+						},
+						&nbdb.ACL{
+							UUID:      namespace1.Name + "_MulticastAllowIngress",
+							Name:      []string{namespace1.Name + "_MulticastAllowIngress"},
+							Priority:  1012,
+							Direction: nbdb.ACLDirectionToLport,
+							Match:     ingressMatch,
+							Action:    nbdb.ACLActionAllow,
+							Log:       false,
+							Meter:     []string{"acl-logging"},
+							Severity:  []string{nbdb.ACLSeverityInfo},
+							ExternalIDs: map[string]string{
+								"default-deny-policy-type": "Ingress",
+							},
+						},
+						&nbdb.PortGroup{
+							UUID: namespace1.Name,
+							Name: hashedPortGroup(namespace1.Name),
+							ACLs: []string{
+								namespace1.Name + "_MulticastAllowEgress",
+								namespace1.Name + "_MulticastAllowIngress",
+							},
+							ExternalIDs: map[string]string{
+								"name": namespace1.Name,
+							},
+						},
+					}
+
 					ns.Annotations[nsMulticastAnnotation] = "true"
 					_, err = fakeOvn.fakeClient.KubeClient.CoreV1().Namespaces().Update(context.TODO(), ns, metav1.UpdateOptions{})
 					gomega.Expect(err).NotTo(gomega.HaveOccurred())
-					gomega.Eventually(fExec.CalledMatchesExpected).Should(gomega.BeTrue(), fExec.ErrorDesc)
+					gomega.Eventually(fakeOvn.nbClient).Should(libovsdb.HaveTestData(expectedData...))
 
 					// Disable multicast in the namespace.
-					mcastPolicy.disableCmds(fExec, namespace1.Name)
 					ns.Annotations[nsMulticastAnnotation] = "false"
 					_, err = fakeOvn.fakeClient.KubeClient.CoreV1().Namespaces().Update(context.TODO(), ns, metav1.UpdateOptions{})
 					gomega.Expect(err).NotTo(gomega.HaveOccurred())
-					gomega.Eventually(fExec.CalledMatchesExpected).Should(gomega.BeTrue(), fExec.ErrorDesc)
+					gomega.Eventually(fakeOvn.nbClient).Should(libovsdb.HaveTestData(expectedData[0], expectedData[1]))
 					return nil
 				}
 
@@ -976,7 +1003,8 @@ var _ = ginkgo.Describe("OVN NetworkPolicy Operations", func() {
 				// an
 				getPGPorts := func(name string) func() ([]string, error) {
 					return func() ([]string, error) {
-						pg, err := fakeOvn.ovnNBClient.PortGroupGet(name)
+						pg := &nbdb.PortGroup{Name: name}
+						err := fakeOvn.nbClient.Get(pg)
 						if err != nil {
 							return nil, err
 						}
@@ -1609,36 +1637,42 @@ func asMatch(addressSets []string) string {
 	return match
 }
 
-func addExpectedGressCmds(fExec *ovntest.FakeExec, gp *gressPolicy, pgName string, oldAS, newAS []string) []string {
-	const uuid string = "94407fe0-2c15-4a63-baea-ab4af0ea5bb8"
-
-	newMatch := asMatch(newAS)
-
+func buildExpectedACLs(gp *gressPolicy, pgName string, as []string) []*nbdb.ACL {
+	name := gp.policyNamespace + "_" + gp.policyName + "_" + strconv.Itoa(gp.idx)
+	asMatch := asMatch(as)
+	match := fmt.Sprintf("ip4.src == {%s} && outport == @%s", asMatch, pgName)
 	gpDirection := string(knet.PolicyTypeIngress)
-	fExec.AddFakeCmd(&ovntest.ExpectedCmd{
-		Cmd: fmt.Sprintf("ovn-nbctl --timeout=15 --data=bare --no-heading --columns=_uuid find ACL external-ids:l4Match=\"None\" external-ids:ipblock_cidr=false external-ids:namespace=%s external-ids:policy=%s external-ids:%s_num=%d external-ids:policy_type=%s",
-			gp.policyNamespace, gp.policyName, gpDirection, gp.idx, gpDirection),
-		Output: uuid,
-	})
-	fExec.AddFakeCmdsNoOutputNoError([]string{
-		fmt.Sprintf("ovn-nbctl --timeout=15 set acl %s match=\"ip4.src == {%s} && outport == @%s\" priority=1001 direction=to-lport action=allow-related log=true severity=info meter=acl-logging name=%s",
-			uuid, newMatch, pgName, gp.policyNamespace+"_"+gp.policyName+"_"+strconv.Itoa(gp.idx)),
-	})
-	return newAS
+	return []*nbdb.ACL{
+		{
+			UUID:      name,
+			Name:      []string{name},
+			Match:     match,
+			Priority:  1001,
+			Direction: nbdb.ACLDirectionToLport,
+			Action:    nbdb.ACLActionAllowRelated,
+			Log:       true,
+			Severity:  []string{nbdb.ACLSeverityInfo},
+			Meter:     []string{"acl-logging"},
+			ExternalIDs: map[string]string{
+				"l4Match":            "None",
+				"ipblock_cidr":       "false",
+				"namespace":          gp.policyNamespace,
+				"policy":             gp.policyName,
+				gpDirection + "_num": fmt.Sprintf("%d", gp.idx),
+				"policy_type":        gpDirection,
+			},
+		},
+	}
 }
 
 var _ = ginkgo.Describe("OVN NetworkPolicy Low-Level Operations", func() {
 	var (
-		fExec     *ovntest.FakeExec
 		asFactory *addressset.FakeAddressSetFactory
 	)
 
 	ginkgo.BeforeEach(func() {
 		// Restore global default values before each testcase
 		config.PrepareTestConfig()
-		fExec = ovntest.NewLooseCompareFakeExec()
-		err := util.SetExec(fExec)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		asFactory = addressset.NewFakeAddressSetFactory()
 		config.IPv4Mode = true
@@ -1647,7 +1681,6 @@ var _ = ginkgo.Describe("OVN NetworkPolicy Low-Level Operations", func() {
 
 	ginkgo.It("computes match strings from address sets correctly", func() {
 		const (
-			pgUUID string = "pg-uuid"
 			pgName string = "pg-name"
 		)
 
@@ -1662,89 +1695,86 @@ var _ = ginkgo.Describe("OVN NetworkPolicy Low-Level Operations", func() {
 		gp := newGressPolicy(knet.PolicyTypeIngress, 0, policy.Namespace, policy.Name)
 		err := gp.ensurePeerAddressSet(asFactory)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		//asName := getIPv4ASName(gp.peerAddressSet.GetName())
 		asName := gp.peerAddressSet.GetName()
 
-		one := fmt.Sprintf("testing.policy.ingress.1")
-		two := fmt.Sprintf("testing.policy.ingress.2")
-		three := fmt.Sprintf("testing.policy.ingress.3")
-		four := fmt.Sprintf("testing.policy.ingress.4")
-		five := fmt.Sprintf("testing.policy.ingress.5")
-		six := fmt.Sprintf("testing.policy.ingress.6")
+		one := "testing.policy.ingress.1"
+		two := "testing.policy.ingress.2"
+		three := "testing.policy.ingress.3"
+		four := "testing.policy.ingress.4"
+		five := "testing.policy.ingress.5"
+		six := "testing.policy.ingress.6"
 
-		cur := addExpectedGressCmds(fExec, gp, pgName, []string{asName}, []string{asName, one})
 		gomega.Expect(gp.addNamespaceAddressSet(one)).To(gomega.BeTrue())
-		gp.localPodSetACL(pgName, pgUUID, defaultACLLoggingSeverity)
-		gomega.Expect(fExec.CalledMatchesExpected()).To(gomega.BeTrue(), fExec.ErrorDesc)
+		expected := buildExpectedACLs(gp, pgName, []string{asName, one})
+		actual := gp.buildLocalPodACLs(pgName, defaultACLLoggingSeverity)
+		gomega.Expect(actual).To(gomega.Equal(expected))
 
-		cur = addExpectedGressCmds(fExec, gp, pgName, cur, []string{asName, one, two})
 		gomega.Expect(gp.addNamespaceAddressSet(two)).To(gomega.BeTrue())
-		gp.localPodSetACL(pgName, pgUUID, defaultACLLoggingSeverity)
-		gomega.Expect(fExec.CalledMatchesExpected()).To(gomega.BeTrue(), fExec.ErrorDesc)
+		expected = buildExpectedACLs(gp, pgName, []string{asName, one, two})
+		actual = gp.buildLocalPodACLs(pgName, defaultACLLoggingSeverity)
+		gomega.Expect(actual).To(gomega.Equal(expected))
 
 		// address sets should be alphabetized
-		cur = addExpectedGressCmds(fExec, gp, pgName, cur, []string{asName, one, two, three})
 		gomega.Expect(gp.addNamespaceAddressSet(three)).To(gomega.BeTrue())
-		gp.localPodSetACL(pgName, pgUUID, defaultACLLoggingSeverity)
-		gomega.Expect(fExec.CalledMatchesExpected()).To(gomega.BeTrue(), fExec.ErrorDesc)
+		expected = buildExpectedACLs(gp, pgName, []string{asName, one, two, three})
+		actual = gp.buildLocalPodACLs(pgName, defaultACLLoggingSeverity)
+		gomega.Expect(actual).To(gomega.Equal(expected))
 
 		// re-adding an existing set is a no-op
-		gp.addNamespaceAddressSet(one)
 		gomega.Expect(gp.addNamespaceAddressSet(three)).To(gomega.BeFalse())
 
-		cur = addExpectedGressCmds(fExec, gp, pgName, cur, []string{asName, one, two, three, four})
 		gomega.Expect(gp.addNamespaceAddressSet(four)).To(gomega.BeTrue())
-		gp.localPodSetACL(pgName, pgUUID, defaultACLLoggingSeverity)
-		gomega.Expect(fExec.CalledMatchesExpected()).To(gomega.BeTrue(), fExec.ErrorDesc)
+		expected = buildExpectedACLs(gp, pgName, []string{asName, one, two, three, four})
+		actual = gp.buildLocalPodACLs(pgName, defaultACLLoggingSeverity)
+		gomega.Expect(actual).To(gomega.Equal(expected))
 
 		// now delete a set
-		cur = addExpectedGressCmds(fExec, gp, pgName, cur, []string{asName, two, three, four})
 		gomega.Expect(gp.delNamespaceAddressSet(one)).To(gomega.BeTrue())
-		gp.localPodSetACL(pgName, pgUUID, defaultACLLoggingSeverity)
-		gomega.Expect(fExec.CalledMatchesExpected()).To(gomega.BeTrue(), fExec.ErrorDesc)
+		expected = buildExpectedACLs(gp, pgName, []string{asName, two, three, four})
+		actual = gp.buildLocalPodACLs(pgName, defaultACLLoggingSeverity)
+		gomega.Expect(actual).To(gomega.Equal(expected))
 
 		// deleting again is a no-op
 		gomega.Expect(gp.delNamespaceAddressSet(one)).To(gomega.BeFalse())
-		gomega.Expect(fExec.CalledMatchesExpected()).To(gomega.BeTrue(), fExec.ErrorDesc)
 
 		// add and delete some more...
-		cur = addExpectedGressCmds(fExec, gp, pgName, cur, []string{asName, two, three, four, five})
 		gomega.Expect(gp.addNamespaceAddressSet(five)).To(gomega.BeTrue())
-		gp.localPodSetACL(pgName, pgUUID, defaultACLLoggingSeverity)
-		gomega.Expect(fExec.CalledMatchesExpected()).To(gomega.BeTrue(), fExec.ErrorDesc)
+		expected = buildExpectedACLs(gp, pgName, []string{asName, two, three, four, five})
+		actual = gp.buildLocalPodACLs(pgName, defaultACLLoggingSeverity)
+		gomega.Expect(actual).To(gomega.Equal(expected))
 
-		cur = addExpectedGressCmds(fExec, gp, pgName, cur, []string{asName, two, four, five})
 		gomega.Expect(gp.delNamespaceAddressSet(three)).To(gomega.BeTrue())
-		gp.localPodSetACL(pgName, pgUUID, defaultACLLoggingSeverity)
-		gomega.Expect(fExec.CalledMatchesExpected()).To(gomega.BeTrue(), fExec.ErrorDesc)
+		expected = buildExpectedACLs(gp, pgName, []string{asName, two, four, five})
+		actual = gp.buildLocalPodACLs(pgName, defaultACLLoggingSeverity)
+		gomega.Expect(actual).To(gomega.Equal(expected))
 
 		// deleting again is no-op
 		gomega.Expect(gp.delNamespaceAddressSet(one)).To(gomega.BeFalse())
 
-		cur = addExpectedGressCmds(fExec, gp, pgName, cur, []string{asName, two, four, five, six})
 		gomega.Expect(gp.addNamespaceAddressSet(six)).To(gomega.BeTrue())
-		gp.localPodSetACL(pgName, pgUUID, defaultACLLoggingSeverity)
-		gomega.Expect(fExec.CalledMatchesExpected()).To(gomega.BeTrue(), fExec.ErrorDesc)
+		expected = buildExpectedACLs(gp, pgName, []string{asName, two, four, five, six})
+		actual = gp.buildLocalPodACLs(pgName, defaultACLLoggingSeverity)
+		gomega.Expect(actual).To(gomega.Equal(expected))
 
-		cur = addExpectedGressCmds(fExec, gp, pgName, cur, []string{asName, four, five, six})
 		gomega.Expect(gp.delNamespaceAddressSet(two)).To(gomega.BeTrue())
-		gp.localPodSetACL(pgName, pgUUID, defaultACLLoggingSeverity)
-		gomega.Expect(fExec.CalledMatchesExpected()).To(gomega.BeTrue(), fExec.ErrorDesc)
+		expected = buildExpectedACLs(gp, pgName, []string{asName, four, five, six})
+		actual = gp.buildLocalPodACLs(pgName, defaultACLLoggingSeverity)
+		gomega.Expect(actual).To(gomega.Equal(expected))
 
-		cur = addExpectedGressCmds(fExec, gp, pgName, cur, []string{asName, four, six})
 		gomega.Expect(gp.delNamespaceAddressSet(five)).To(gomega.BeTrue())
-		gp.localPodSetACL(pgName, pgUUID, defaultACLLoggingSeverity)
-		gomega.Expect(fExec.CalledMatchesExpected()).To(gomega.BeTrue(), fExec.ErrorDesc)
+		expected = buildExpectedACLs(gp, pgName, []string{asName, four, six})
+		actual = gp.buildLocalPodACLs(pgName, defaultACLLoggingSeverity)
+		gomega.Expect(actual).To(gomega.Equal(expected))
 
-		cur = addExpectedGressCmds(fExec, gp, pgName, cur, []string{asName, four})
 		gomega.Expect(gp.delNamespaceAddressSet(six)).To(gomega.BeTrue())
-		gp.localPodSetACL(pgName, pgUUID, defaultACLLoggingSeverity)
-		gomega.Expect(fExec.CalledMatchesExpected()).To(gomega.BeTrue(), fExec.ErrorDesc)
+		expected = buildExpectedACLs(gp, pgName, []string{asName, four})
+		actual = gp.buildLocalPodACLs(pgName, defaultACLLoggingSeverity)
+		gomega.Expect(actual).To(gomega.Equal(expected))
 
-		cur = addExpectedGressCmds(fExec, gp, pgName, cur, []string{asName})
 		gomega.Expect(gp.delNamespaceAddressSet(four)).To(gomega.BeTrue())
-		gp.localPodSetACL(pgName, pgUUID, defaultACLLoggingSeverity)
-		gomega.Expect(fExec.CalledMatchesExpected()).To(gomega.BeTrue(), fExec.ErrorDesc)
+		expected = buildExpectedACLs(gp, pgName, []string{asName})
+		actual = gp.buildLocalPodACLs(pgName, defaultACLLoggingSeverity)
+		gomega.Expect(actual).To(gomega.Equal(expected))
 
 		// deleting again is no-op
 		gomega.Expect(gp.delNamespaceAddressSet(four)).To(gomega.BeFalse())

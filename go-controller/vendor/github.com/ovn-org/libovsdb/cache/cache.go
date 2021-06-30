@@ -90,6 +90,8 @@ func (r *RowCache) Row(uuid string) model.Model {
 
 // RowByModel searches the cache using a the indexes for a provided model
 func (r *RowCache) RowByModel(m model.Model) model.Model {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
 	if reflect.TypeOf(m) != r.dataType {
 		return nil
 	}

@@ -168,6 +168,14 @@ func (o *OvsdbServer) Transact(client *rpc2.Client, args []json.RawMessage, repl
 		for i, mutation := range op.Mutations {
 			op.Mutations[i].Value = expandNamedUUID(mutation.Value, namedUUID)
 		}
+		for _, row := range op.Rows {
+			for k, v := range row {
+				row[k] = expandNamedUUID(v, namedUUID)
+			}
+		}
+		for k, v := range op.Row {
+			op.Row[k] = expandNamedUUID(v, namedUUID)
+		}
 		ops = append(ops, op)
 	}
 	response, update := o.db.Transact(db, ops)
