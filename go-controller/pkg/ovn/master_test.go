@@ -1081,13 +1081,7 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			hostAddrs, err := util.ParseNodeHostAddresses(updatedNode)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			fexec.AddFakeCmdsNoOutputNoError([]string{
-				"ovn-nbctl --timeout=15 --if-exist get logical_router_port rtoj-GR_" + types.OVNClusterRouter + " networks",
-			})
-			fexec.AddFakeCmd(&ovntest.ExpectedCmd{
-				Cmd:    "ovn-nbctl --timeout=15 --if-exist get logical_router_port rtoj-GR_" + node1.Name + " networks",
-				Output: "[\"100.64.0.2/16\"]",
-			})
+
 			addNodeLogicalFlows(fexec, &node1, clusterCIDR, config.IPv6Mode)
 			addPBRandNATRules(fexec, &node1, clusterCIDR)
 
@@ -1122,7 +1116,7 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 			gomega.Expect(clusterController).NotTo(gomega.BeNil())
 
 			clusterController.SCTPSupport = true
-			clusterController.joinSwIPManager, _ = lsm.NewJoinLogicalSwitchIPManager([]string{node1.Name})
+			clusterController.joinSwIPManager, _ = lsm.NewJoinLogicalSwitchIPManager(clusterController.nbClient, []string{node1.Name})
 			_, _ = clusterController.joinSwIPManager.EnsureJoinLRPIPs(types.OVNClusterRouter)
 
 			clusterController.nodeLocalNatIPv4Allocator, _ = ipallocator.NewCIDRRange(ovntest.MustParseIPNet(types.V4NodeLocalNATSubnet))
