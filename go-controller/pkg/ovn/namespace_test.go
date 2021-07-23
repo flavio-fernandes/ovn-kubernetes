@@ -2,16 +2,14 @@ package ovn
 
 import (
 	"context"
-	"net"
-
 	"github.com/urfave/cli/v2"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"net"
 
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
 	egressfirewallfake "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/egressfirewall/v1/apis/clientset/versioned/fake"
 	egressipfake "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/egressip/v1/apis/clientset/versioned/fake"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/kube"
-	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/libovsdbops"
 	ovntest "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/testing"
 	ovntypes "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/types"
 	util "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
@@ -264,12 +262,8 @@ var _ = ginkgo.Describe("OVN Namespace Operations", func() {
 				gomega.Expect(len(gwLRPIPs) != 0).To(gomega.BeTrue())
 
 				// clusterController.WatchNodes() needs to following two port groups to have been created.
-				pg := libovsdbops.BuildPortGroup(ovntypes.ClusterPortGroupName, ovntypes.ClusterPortGroupName, nil, nil)
-				err = libovsdbops.CreateOrUpdatePortGroup(fakeOvn.controller.nbClient, pg)
-				gomega.Expect(err).NotTo(gomega.HaveOccurred())
-				pg = libovsdbops.BuildPortGroup(ovntypes.ClusterRtrPortGroupName, ovntypes.ClusterRtrPortGroupName, nil, nil)
-				err = libovsdbops.CreateOrUpdatePortGroup(fakeOvn.controller.nbClient, pg)
-				gomega.Expect(err).NotTo(gomega.HaveOccurred())
+				fakeOvn.controller.clusterRtrPortGroupUUID, err = createPortGroup(fakeOvn.controller.ovnNBClient, clusterRtrPortGroupName, clusterRtrPortGroupName)
+				fakeOvn.controller.clusterPortGroupUUID, err = createPortGroup(fakeOvn.controller.ovnNBClient, clusterPortGroupName, clusterPortGroupName)
 
 				fakeOvn.controller.WatchNamespaces()
 				fakeOvn.asf.EventuallyExpectEmptyAddressSet(hostNetworkNamespace)

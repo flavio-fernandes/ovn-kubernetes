@@ -118,7 +118,4 @@ const (
 	NodeModeFull         = "full"
 	NodeModeSmartNIC     = "smart-nic"
 	NodeModeSmartNICHost = "smart-nic-host"
-
-	ClusterPortGroupName    = "clusterPortGroup"
-	ClusterRtrPortGroupName = "clusterRtrPortGroup"
 )

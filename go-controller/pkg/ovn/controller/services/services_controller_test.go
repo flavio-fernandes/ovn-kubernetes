@@ -26,6 +26,7 @@ const (
 	gatewayRouter1        = "2e290f10-3652-11eb-839b-a8a1590cda29"
 	logicalSwitch1        = "17bde5e8-3652-11eb-b53b-a8a1590cda29"
 	idlingloadbalancerTCP = "a08ea426-2288-11eb-a30b-a8a1590cda30"
+	clusterPortGroupUUID  = "a08ea426-2288-11eb-a30b-a8a1590cda31"
 )
 
 var alwaysReady = func() bool { return true }
@@ -54,6 +55,7 @@ func newControllerWithDBSetup(dbSetup libovsdbtest.TestSetup) (*serviceControlle
 		nbClient,
 		informerFactory.Core().V1().Services(),
 		informerFactory.Discovery().V1beta1().EndpointSlices(),
+		clusterPortGroupUUID,
 	)
 	controller.servicesSynced = alwaysReady
 	controller.endpointSlicesSynced = alwaysReady
