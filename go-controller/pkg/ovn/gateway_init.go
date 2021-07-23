@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/libovsdbops"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/loadbalancer"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/types"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
@@ -757,17 +758,29 @@ func (oc *Controller) addNodeLocalNatEntries(node *kapi.Node, mgmtPortMAC string
 	}
 
 	mgmtPortName := types.K8sPrefix + node.Name
+
+	// FIXME(flaviof): remove this
 	stdout, stderr, err := util.RunOVNNbctl("--if-exists", "lr-nat-del", types.OVNClusterRouter,
 		"dnat_and_snat", externalIP.String())
 	if err != nil {
 		return fmt.Errorf("failed to delete dnat_and_snat entry for the management port on node %s, "+
 			"stdout: %s, stderr: %q, error: %v", node.Name, stdout, stderr, err)
 	}
+	// FIXME(flaviof): remove this
 	stdout, stderr, err = util.RunOVNNbctl("lr-nat-add", types.OVNClusterRouter, "dnat_and_snat",
 		externalIP.String(), mgmtPortIfAddr.IP.String(), mgmtPortName, mgmtPortMAC)
 	if err != nil {
 		return fmt.Errorf("failed to add dnat_and_snat entry for the management port on node %s, "+
 			"stdout: %s, stderr: %q, error: %v", node.Name, stdout, stderr, err)
+	}
+
+	// err = libovsdbops.CreateOrUpdateLogicalRouterNAT(oc.nbClient, types.OVNClusterRouter,
+	// 	"dnat_and_snat", externalIP.String(), mgmtPortIfAddr.IP.String(), mgmtPortName,
+	// 	mgmtPortMAC)
+	err = libovsdbops.CreateOrUpdateLogicalRouterNAT(oc.nbClient)
+	if err != nil {
+		return fmt.Errorf("failed to add dnat_and_snat entry for the management port on node %s, "+
+			"error: %v", node.Name, err)
 	}
 
 	if annotationPresent {
