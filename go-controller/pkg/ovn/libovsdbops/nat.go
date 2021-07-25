@@ -47,14 +47,7 @@ func CreateOrUpdateLogicalRouterNAT(nbClient libovsdbclient.Client, routerName s
 	if len(routers) > 1 {
 		return fmt.Errorf("unexpectedly found multiple logical routers: %+v", routers)
 	}
-	// TODO(flaviof): this seems weird...
-	router := &nbdb.LogicalRouter{
-		UUID: routers[0].UUID,
-	}
-	err = nbClient.Get(router)
-	if err != nil {
-		return fmt.Errorf("error getting logical router %s: %v", routerName, err)
-	}
+	router := &routers[0]
 
 	nats := []nbdb.NAT{}
 	err = nbClient.WhereCache(func(item *nbdb.NAT) bool {
@@ -78,7 +71,7 @@ func CreateOrUpdateLogicalRouterNAT(nbClient libovsdbclient.Client, routerName s
 
 	if natIndex == -1 {
 		nat := buildRouterNAT(natType, externalIP, logicalIP, logicalPort, externalMac)
-		nat.UUID = "rtr_nat"
+		nat.UUID = "new_rtr_nat"
 		op, err := nbClient.Create(nat)
 		if err != nil {
 			return fmt.Errorf("error creating NAT for logical router %s: %v", routerName, err)
@@ -93,16 +86,6 @@ func CreateOrUpdateLogicalRouterNAT(nbClient libovsdbclient.Client, routerName s
 			return fmt.Errorf("error adding NAT to logical router %s: %v", routerName, err)
 		}
 		ops = append(ops, mutateOp...)
-
-		// Hack until mutate operation bug is fixed?!?
-		mutations = []model.Mutation{
-			{Field: &router.ExternalIDs, Mutator: libovsdb.MutateOperationInsert, Value: map[string]string{"temp": "workaround_mutate_bug"}},
-		}
-		mutateOp2, err := nbClient.Where(router).Mutate(router, mutations...)
-		if err != nil {
-			return fmt.Errorf("error adding NAT to logical router %s: %v", routerName, err)
-		}
-		ops = append(ops, mutateOp2...)
 	} else {
 		nat := buildRouterNAT(natType, externalIP, logicalIP, logicalPort, externalMac)
 		op, err := nbClient.Where(&nats[natIndex]).Update(nat)
