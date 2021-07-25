@@ -58,7 +58,7 @@ func CreateOrUpdateLogicalRouterNAT(nbClient libovsdbclient.Client, routerName s
 		natType, externalIP.String(), err)
 	}
 
-	// Locate NAT used by logical router
+	// Locate NAT used by logical router, if there is one
 	natIndex := -1
 	for i := 0; natIndex == -1 && i < len(nats); i++ {
 		for _, rtrNatUUID := range router.Nat {

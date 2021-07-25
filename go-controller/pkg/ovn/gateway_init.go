@@ -759,29 +759,6 @@ func (oc *Controller) addNodeLocalNatEntries(node *kapi.Node, mgmtPortMAC string
 	}
 
 	mgmtPortName := types.K8sPrefix + node.Name
-
-	// FIXME(flaviof): remove this
-	// stdout, stderr, err := util.RunOVNNbctl("--if-exists", "lr-nat-del", types.OVNClusterRouter,
-	// 	"dnat_and_snat", externalIP.String())
-	// if err != nil {
-	// 	return fmt.Errorf("failed to delete dnat_and_snat entry for the management port on node %s, "+
-	// 		"stdout: %s, stderr: %q, error: %v", node.Name, stdout, stderr, err)
-	// }
-	// // FIXME(flaviof): remove this
-	// stdout, stderr, err = util.RunOVNNbctl("lr-nat-add", types.OVNClusterRouter, "dnat_and_snat",
-	// 	externalIP.String(), mgmtPortIfAddr.IP.String(), mgmtPortName, mgmtPortMAC)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to add dnat_and_snat entry for the management port on node %s, "+
-	// 		"stdout: %s, stderr: %q, error: %v", node.Name, stdout, stderr, err)
-	// }
-
-	// err = libovsdbops.CreateOrUpdateLogicalRouterNAT(oc.nbClient, types.OVNClusterRouter,
-	// 	"dnat_and_snat", externalIP.String(), mgmtPortIfAddr.IP.String(), mgmtPortName,
-	// 	mgmtPortMAC)
-	// func CreateOrUpdateLogicalRouterNAT(nbClient libovsdbclient.Client, routerName string,
-	// 	natType nbdb.NATType, externalIP net.IP, logicalIP net.IP, logicalPort string,
-	// 	externalMac string) error {
-	
 	err = libovsdbops.CreateOrUpdateLogicalRouterNAT(oc.nbClient, types.OVNClusterRouter, 
 		nbdb.NATTypeDNATAndSNAT, externalIP, mgmtPortIfAddr.IP, mgmtPortName, mgmtPortMAC)
 	if err != nil {
