@@ -147,17 +147,9 @@ func (oc *Controller) addGWRoutesForNamespace(namespace string, egress gatewayIn
 				}
 
 				mask := GetIPFullMask(podIP.IP)
-				nbctlArgs := []string{"--may-exist", "--policy=src-ip", "--ecmp-symmetric-reply",
-					"lr-route-add", gr, podIP.IP + mask, gw.String(), port}
-				if egress.bfdEnabled {
-					nbctlArgs = []string{"--may-exist", "--bfd", "--policy=src-ip", "--ecmp-symmetric-reply",
-						"lr-route-add", gr, podIP.IP + mask, gw.String(), port}
-				}
 
-				_, stderr, err := util.RunOVNNbctl(nbctlArgs...)
-
-				if err != nil && !strings.Contains(stderr, DuplicateECMPError) {
-					return fmt.Errorf("unable to add src-ip route to GR router, stderr:%q, err:%v", stderr, err)
+				if err := oc.createBFDStaticRoute(egress.bfdEnabled, gw, podIP.IP, gr, port, mask); err != nil {
+					return err
 				}
 				if err := oc.addHybridRoutePolicyForPod(net.ParseIP(podIP.IP), pod.Spec.NodeName); err != nil {
 					return err
@@ -168,6 +160,95 @@ func (oc *Controller) addGWRoutesForNamespace(namespace string, egress gatewayIn
 				nsInfo.podExternalRoutes[podIP.IP][gw.String()] = gr
 			}
 		}
+	}
+	return nil
+}
+
+func (oc *Controller) createBFDStaticRoute(bfdEnabled bool, gw net.IP, podIP, gr, port, mask string) error {
+	opModels := []libovsdbops.OperationModel{}
+
+	bfd := nbdb.BFD{
+		DstIP:       gw.String(),
+		LogicalPort: port,
+	}
+	bfdRes := []nbdb.BFD{}
+	if bfdEnabled {
+		opModels = []libovsdbops.OperationModel{
+			{
+				Model:          &bfd,
+				ExistingResult: &bfdRes,
+			},
+		}
+	}
+	if _, err := oc.modelClient.CreateOrUpdate(opModels...); err != nil {
+		return fmt.Errorf("unable to add BFD for static route, err: %v", err)
+	}
+
+	logicalRouter := nbdb.LogicalRouter{}
+	logicalRouterStaticRoute := nbdb.LogicalRouterStaticRoute{
+		Policy: &nbdb.LogicalRouterStaticRoutePolicySrcIP,
+		Options: map[string]string{
+			"ecmp_symmetric_reply": "true",
+		},
+		Nexthop:    gw.String(),
+		IPPrefix:   podIP + mask,
+		OutputPort: &port,
+	}
+	bfd.UUID = ""
+	if err := oc.nbClient.Get(&bfd); err == nil {
+		logicalRouterStaticRoute.BFD = &bfd.UUID
+	}
+	opModels = []libovsdbops.OperationModel{
+		{
+			Model: &logicalRouterStaticRoute,
+			ModelPredicate: func(lrsr *nbdb.LogicalRouterStaticRoute) bool {
+				return lrsr.IPPrefix == podIP+mask &&
+					lrsr.Nexthop == gw.String() &&
+					lrsr.OutputPort != nil && *lrsr.OutputPort == port
+			},
+			ExistingResult: &[]nbdb.LogicalRouterStaticRoute{},
+		}, {
+			Model: &logicalRouter,
+			ModelPredicate: func(lr *nbdb.LogicalRouter) bool {
+				return lr.Name == gr
+			},
+			OnModelMutations: func() []model.Mutation {
+				return libovsdbops.OnReferentialModelMutation(&logicalRouter.StaticRoutes, ovsdb.MutateOperationInsert, logicalRouterStaticRoute)
+			},
+			ExistingResult: &[]nbdb.LogicalRouter{},
+		},
+	}
+	if _, err := oc.modelClient.CreateOrUpdate(opModels...); err != nil {
+		return fmt.Errorf("unable to add src-ip route to GR router, err: %v", err)
+	}
+	return nil
+}
+
+func (oc *Controller) deleteLogicalRouterStaticRoute(podIP, mask, gw, gr string) error {
+	logicalRouter := nbdb.LogicalRouter{}
+	logicalRouterStaticRouteRes := []nbdb.LogicalRouterStaticRoute{}
+	opModels := []libovsdbops.OperationModel{
+		{
+			ModelPredicate: func(lrsr *nbdb.LogicalRouterStaticRoute) bool {
+				return lrsr.Policy != nil && *lrsr.Policy == nbdb.LogicalRouterStaticRoutePolicySrcIP &&
+					lrsr.IPPrefix == podIP+mask &&
+					lrsr.Nexthop == gw
+			},
+			ExistingResult: &logicalRouterStaticRouteRes,
+		},
+		{
+			Model: &logicalRouter,
+			ModelPredicate: func(lr *nbdb.LogicalRouter) bool {
+				return lr.Name == gr
+			},
+			OnModelMutations: func() []model.Mutation {
+				return libovsdbops.OnReferentialModelMutation(&logicalRouter.StaticRoutes, ovsdb.MutateOperationDelete, logicalRouterStaticRouteRes)
+			},
+			ExistingResult: &[]nbdb.LogicalRouter{},
+		},
+	}
+	if err := oc.modelClient.Delete(opModels...); err != nil {
+		return fmt.Errorf("unable to delete src-ip route to GR router, err: %v", err)
 	}
 	return nil
 }
@@ -219,11 +300,8 @@ func (oc *Controller) deletePodGWRoutesForNamespace(pod, namespace string) {
 				continue
 			}
 
-			_, stderr, err := util.RunOVNNbctl("--if-exists", "--policy=src-ip",
-				"lr-route-del", gr, podIP+mask, gwIP.String())
-			if err != nil {
-				klog.Errorf("Unable to delete pod %s route to GR %s, GW: %s, stderr:%q, err:%v",
-					pod, gr, gwIP.String(), stderr, err)
+			if err := oc.deleteLogicalRouterStaticRoute(podIP, mask, gwIP.String(), gr); err != nil {
+				klog.Error(err)
 			} else {
 				klog.V(5).Infof("ECMP route deleted for pod: %s, on gr: %s, to gw: %s", pod,
 					gr, gwIP.String())
@@ -263,10 +341,9 @@ func (oc *Controller) deleteGWRoutesForNamespace(nsInfo *namespaceInfo) {
 			if err := oc.delHybridRoutePolicyForPod(net.ParseIP(podIP), node, false); err != nil {
 				klog.Error(err)
 			}
-			_, stderr, err := util.RunOVNNbctl("--if-exists", "--policy=src-ip",
-				"lr-route-del", gr, podIP+mask, gw)
-			if err != nil {
-				klog.Errorf("Unable to delete src-ip route to GR router, stderr:%q, err:%v", stderr, err)
+
+			if err := oc.deleteLogicalRouterStaticRoute(podIP, mask, gw, gr); err != nil {
+				klog.Error(err)
 			} else {
 				delete(nsInfo.podExternalRoutes, podIP)
 			}
@@ -310,10 +387,8 @@ func (oc *Controller) deleteGWRoutesForPod(namespace string, podIPNets []*net.IP
 				if err := oc.delHybridRoutePolicyForPod(podIPNet.IP, node, false); err != nil {
 					klog.Error(err)
 				}
-				_, stderr, err := util.RunOVNNbctl("--if-exists", "--policy=src-ip",
-					"lr-route-del", gr, pod+mask, gw)
-				if err != nil {
-					klog.Errorf("Unable to delete external gw ecmp route to GR router, stderr:%q, err:%v", stderr, err)
+				if err := oc.deleteLogicalRouterStaticRoute(pod, mask, gw, gr); err != nil {
+					klog.Errorf("Unable to delete external gw ecmp route to GR router, err: %v", err)
 				} else {
 					delete(nsInfo.podExternalRoutes, pod)
 				}
@@ -356,15 +431,9 @@ func (oc *Controller) addGWRoutesForPod(gateways []*gatewayInfo, podIfAddrs []*n
 						continue
 					}
 					mask := GetIPFullMask(podIP)
-					nbctlArgs := []string{"--may-exist", "--policy=src-ip", "--ecmp-symmetric-reply",
-						"lr-route-add", gr, podIP + mask, gw.String(), port}
-					if gateway.bfdEnabled {
-						nbctlArgs = []string{"--may-exist", "--bfd", "--policy=src-ip", "--ecmp-symmetric-reply",
-							"lr-route-add", gr, podIP + mask, gw.String(), port}
-					}
-					_, stderr, err := util.RunOVNNbctl(nbctlArgs...)
-					if err != nil && !strings.Contains(stderr, DuplicateECMPError) {
-						return fmt.Errorf("unable to add external gwStr src-ip route to GR router, stderr:%q, err:%gw", stderr, err)
+
+					if err := oc.createBFDStaticRoute(gateway.bfdEnabled, gw, podIP, gr, port, mask); err != nil {
+						return err
 					}
 					if err := oc.addHybridRoutePolicyForPod(podIPNet.IP, node); err != nil {
 						return err
