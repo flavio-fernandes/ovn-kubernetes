@@ -522,6 +522,22 @@ node4 chassis=912d592c-904c-40cd-9ef1-c2e5b49a33dd lb_force_snat_ip=100.64.0.4`,
 					Policies:     []string{"match1-UUID", "match2-UUID", "match3-UUID", "match4-UUID", "match5-UUID", "match6-UUID"},
 					StaticRoutes: []string{"static-route-UUID"},
 				},
+				&nbdb.LogicalRouter{
+					Name: types.GWRouterPrefix + nodeName,
+					UUID: types.GWRouterPrefix + nodeName + "-UUID",
+				},
+				&nbdb.LogicalSwitchPort{
+					Name: types.JoinSwitchToGWRouterPrefix + types.GWRouterPrefix + nodeName,
+					UUID: types.JoinSwitchToGWRouterPrefix + types.GWRouterPrefix + nodeName + "-UUID",
+				},
+				&nbdb.LogicalSwitch{
+					Name: types.ExternalSwitchPrefix + nodeName,
+					UUID: types.ExternalSwitchPrefix + nodeName + "-UUID ",
+				},
+				&nbdb.LogicalSwitch{
+					Name: types.ExternalSwitchPrefix + types.ExternalSwitchPrefix + nodeName,
+					UUID: types.ExternalSwitchPrefix + types.ExternalSwitchPrefix + nodeName + "-UUID",
+				},
 			},
 		}
 		libovsdbOvnNBClient, libovsdbOvnSBClient, err := libovsdbtest.NewNBSBTestHarness(dbSetup, stopChan)
@@ -586,9 +602,6 @@ node4 chassis=912d592c-904c-40cd-9ef1-c2e5b49a33dd lb_force_snat_ip=100.64.0.4`,
 		err = util.SetExec(fexec)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-		fexec.AddFakeCmdsNoOutputNoError([]string{
-			"ovn-nbctl --timeout=15 --if-exist lsp-del jtor-GR_test-node",
-		})
 		fexec.AddFakeCmd(&ovntest.ExpectedCmd{
 			Cmd:    "ovn-nbctl --timeout=15 --format=json --data=json --columns=name,_uuid,protocol,external_ids,vips find load_balancer",
 			Output: fakeLBCache,
@@ -599,11 +612,6 @@ node4 chassis=912d592c-904c-40cd-9ef1-c2e5b49a33dd lb_force_snat_ip=100.64.0.4`,
 		fexec.AddFakeCmd(&ovntest.ExpectedCmd{
 			Cmd:    `ovn-nbctl --timeout=15 --no-heading --format=csv --data=bare --columns=name,load_balancer find logical_router`,
 			Output: "GR_test-node,cb6ebcb0-c12d-4404-ada7-5aa2b898f06b",
-		})
-		fexec.AddFakeCmdsNoOutputNoError([]string{
-			"ovn-nbctl --timeout=15 --if-exist lr-del GR_test-node",
-			"ovn-nbctl --timeout=15 --if-exist ls-del ext_test-node",
-			"ovn-nbctl --timeout=15 --if-exist ls-del ext_ext_test-node",
 		})
 
 		cleanupPBRandNATRules(fexec, nodeName)
@@ -723,6 +731,22 @@ node4 chassis=912d592c-904c-40cd-9ef1-c2e5b49a33dd lb_force_snat_ip=100.64.0.4`,
 					Policies:     []string{"match1-UUID", "match2-UUID", "match3-UUID", "match4-UUID", "match5-UUID", "match6-UUID"},
 					StaticRoutes: []string{"static-route-1-UUID", "static-route-2-UUID"},
 				},
+				&nbdb.LogicalRouter{
+					Name: types.GWRouterPrefix + nodeName,
+					UUID: types.GWRouterPrefix + nodeName + "-UUID",
+				},
+				&nbdb.LogicalSwitchPort{
+					Name: types.JoinSwitchToGWRouterPrefix + types.GWRouterPrefix + nodeName,
+					UUID: types.JoinSwitchToGWRouterPrefix + types.GWRouterPrefix + nodeName + "-UUID",
+				},
+				&nbdb.LogicalSwitch{
+					Name: types.ExternalSwitchPrefix + nodeName,
+					UUID: types.ExternalSwitchPrefix + nodeName + "-UUID ",
+				},
+				&nbdb.LogicalSwitch{
+					Name: types.ExternalSwitchPrefix + types.ExternalSwitchPrefix + nodeName,
+					UUID: types.ExternalSwitchPrefix + types.ExternalSwitchPrefix + nodeName + "-UUID",
+				},
 			},
 		}
 		libovsdbOvnNBClient, libovsdbOvnSBClient, err := libovsdbtest.NewNBSBTestHarness(dbSetup, stopChan)
@@ -788,9 +812,6 @@ node4 chassis=912d592c-904c-40cd-9ef1-c2e5b49a33dd lb_force_snat_ip=100.64.0.4`,
 		err = util.SetExec(fexec)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-		fexec.AddFakeCmdsNoOutputNoError([]string{
-			"ovn-nbctl --timeout=15 --if-exist lsp-del jtor-GR_test-node",
-		})
 		fexec.AddFakeCmd(&ovntest.ExpectedCmd{
 			Cmd:    "ovn-nbctl --timeout=15 --format=json --data=json --columns=name,_uuid,protocol,external_ids,vips find load_balancer",
 			Output: fakeLBCache,
@@ -801,12 +822,6 @@ node4 chassis=912d592c-904c-40cd-9ef1-c2e5b49a33dd lb_force_snat_ip=100.64.0.4`,
 		fexec.AddFakeCmd(&ovntest.ExpectedCmd{
 			Cmd:    `ovn-nbctl --timeout=15 --no-heading --format=csv --data=bare --columns=name,load_balancer find logical_router`,
 			Output: "GR_test-node,cb6ebcb0-c12d-4404-ada7-5aa2b898f06b",
-		})
-
-		fexec.AddFakeCmdsNoOutputNoError([]string{
-			"ovn-nbctl --timeout=15 --if-exist lr-del GR_test-node",
-			"ovn-nbctl --timeout=15 --if-exist ls-del ext_test-node",
-			"ovn-nbctl --timeout=15 --if-exist ls-del ext_ext_test-node",
 		})
 
 		cleanupPBRandNATRules(fexec, nodeName)
