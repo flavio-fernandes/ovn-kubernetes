@@ -3,10 +3,21 @@ package libovsdbops
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 
 	"github.com/ovn-org/libovsdb/client"
 	"github.com/ovn-org/libovsdb/ovsdb"
 )
+
+const (
+	namedUUIDPrefix = 'u'
+)
+
+func buildNamedUUID(id string) string {
+	h := fnv.New64a()
+	h.Write([]byte(id)) //nolint:errcheck
+	return fmt.Sprintf("%c%d", namedUUIDPrefix, h.Sum64())
+}
 
 func TransactAndCheck(client client.Client, ops []ovsdb.Operation) ([]ovsdb.OperationResult, error) {
 	if len(ops) <= 0 {
