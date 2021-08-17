@@ -10,10 +10,13 @@ import (
 	"syscall"
 	"time"
 
+	libovsdb "github.com/ovn-org/libovsdb/ovsdb"
 	libovsdbclient "github.com/ovn-org/libovsdb/client"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
 	egressipv1 "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/egressip/v1"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/factory"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/nbdb"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/libovsdbops"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/types"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
 	kapi "k8s.io/api/core/v1"
@@ -827,12 +830,16 @@ func (e *egressIPController) addPodEgressIP(eIP *egressipv1.EgressIP, pod *kapi.
 	if err := e.handleEgressReroutePolicy(podIPs, eIP.Status.Items, eIP.Name, e.createEgressReroutePolicy); err != nil {
 		return fmt.Errorf("unable to create logical router policy, err: %v", err)
 	}
+
+	var ops []libovsdb.Operation
+	var err error
 	for _, status := range eIP.Status.Items {
-		if err := createNATRule(podIPs, status, eIP.Name); err != nil {
+		if ops, err = createNATRuleOps(e.nbClient, ops, podIPs, status, eIP.Name); err != nil {
 			return fmt.Errorf("unable to create NAT rule for status: %v, err: %v", status, err)
 		}
 	}
-	return nil
+	_, err = libovsdbops.TransactAndCheck(e.nbClient, ops)
+	return err
 }
 
 func (e *egressIPController) deletePodEgressIP(eIP *egressipv1.EgressIP, pod *kapi.Pod) error {
@@ -846,12 +853,16 @@ func (e *egressIPController) deletePodEgressIP(eIP *egressipv1.EgressIP, pod *ka
 	if err := e.handleEgressReroutePolicy(podIPs, eIP.Status.Items, eIP.Name, e.deleteEgressReroutePolicy); err != nil {
 		return fmt.Errorf("unable to delete logical router policy, err: %v", err)
 	}
+
+	var ops []libovsdb.Operation
+	var err error
 	for _, status := range eIP.Status.Items {
-		if err := deleteNATRule(podIPs, status, eIP.Name); err != nil {
+		if ops, err = deleteNATRuleOps(e.nbClient, ops, podIPs, status, eIP.Name); err != nil {
 			return fmt.Errorf("unable to delete NAT rule for status: %v, err: %v", status, err)
 		}
 	}
-	return nil
+	_, err = libovsdbops.TransactAndCheck(e.nbClient, ops)
+	return err
 }
 
 func (e *egressIPController) getGatewayRouterJoinIP(node string, wantsIPv6 bool) (net.IP, error) {
@@ -1203,82 +1214,68 @@ func deleteDefaultNoRerouteNodePolicies(v4NodeAddr, v6NodeAddr net.IP, v4Cluster
 	return nil
 }
 
-func createNATRule(podIPs []net.IP, status egressipv1.EgressIPStatusItem, egressIPName string) error {
-	for _, podIP := range podIPs {
-		if (utilnet.IsIPv6String(status.EgressIP) && utilnet.IsIPv6(podIP)) || (!utilnet.IsIPv6String(status.EgressIP) && !utilnet.IsIPv6(podIP)) {
-			natIDs, err := findNatIDs(egressIPName, podIP.String(), status.EgressIP)
-			if err != nil {
-				return err
-			}
-			if natIDs == nil {
-				_, stderr, err := util.RunOVNNbctl(
-					"--id=@nat",
-					"create",
-					"nat",
-					"type=snat",
-					fmt.Sprintf("logical_port=k8s-%s", status.Node),
-					fmt.Sprintf("external_ip=\"%s\"", status.EgressIP),
-					fmt.Sprintf("logical_ip=\"%s\"", podIP),
-					fmt.Sprintf("external_ids:name=%s", egressIPName),
-					"--",
-					"add",
-					"logical_router",
-					util.GetGatewayRouterFromNode(status.Node),
-					"nat",
-					"@nat",
-				)
-				if err != nil {
-					return fmt.Errorf("unable to create nat rule, stderr: %s, err: %v", stderr, err)
-				}
-			}
-		}
+func buildSNAT(podIP net.IP, status egressipv1.EgressIPStatusItem, egressIPName string) (*nbdb.NAT, error) {
+	var logicalIPStr string
+	if utilnet.IsIPv6(podIP) {
+		logicalIPStr = fmt.Sprintf("%s/128", podIP.String())
+	} else {
+		logicalIPStr = fmt.Sprintf("%s/32", podIP.String())
 	}
-	return nil
-}
-
-func deleteNATRule(podIPs []net.IP, status egressipv1.EgressIPStatusItem, egressIPName string) error {
-	for _, podIP := range podIPs {
-		if (utilnet.IsIPv6String(status.EgressIP) && utilnet.IsIPv6(podIP)) || (!utilnet.IsIPv6String(status.EgressIP) && !utilnet.IsIPv6(podIP)) {
-			natIDs, err := findNatIDs(egressIPName, podIP.String(), status.EgressIP)
-			if err != nil {
-				return err
-			}
-			for _, natID := range natIDs {
-				_, stderr, err := util.RunOVNNbctl(
-					"remove",
-					"logical_router",
-					util.GetGatewayRouterFromNode(status.Node),
-					"nat",
-					natID,
-				)
-				if err != nil {
-					return fmt.Errorf("unable to remove nat from logical_router, stderr: %s, err: %v", stderr, err)
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func findNatIDs(egressIPName, podIP, egressIP string) ([]string, error) {
-	natIDs, stderr, err := util.RunOVNNbctl(
-		"--format=csv",
-		"--data=bare",
-		"--no-heading",
-		"--columns=_uuid",
-		"find",
-		"nat",
-		fmt.Sprintf("external_ids:name=%s", egressIPName),
-		fmt.Sprintf("logical_ip=\"%s\"", podIP),
-		fmt.Sprintf("external_ip=\"%s\"", egressIP),
-	)
+	_, logicalIP, err := net.ParseCIDR(logicalIPStr)
 	if err != nil {
-		return nil, fmt.Errorf("unable to find nat ID, stderr: %s, err: %v", stderr, err)
+		return nil, fmt.Errorf("failed to parse podIP: %s, error: %v", podIP.String(), err)
 	}
-	if natIDs == "" {
-		return nil, nil
+	externalIP := net.ParseIP(status.EgressIP)
+	logicalPort := fmt.Sprintf("k8s-%s", status.Node)
+	externalIds := &map[string]string{"name": egressIPName}
+	nat, err := libovsdbops.BuildRouterSNAT(&externalIP, logicalIP, logicalPort, externalIds)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SNAT rule for logicalPort: %s, logicalIP: %s, externalIP: %s,"+
+			" error: %v", logicalPort, podIP.String(), status.EgressIP, err)
 	}
-	return strings.Split(natIDs, "\n"), nil
+	return nat, nil
+}
+
+func createNATRuleOps(nbClient libovsdbclient.Client, ops []libovsdb.Operation, podIPs []net.IP, status egressipv1.EgressIPStatusItem, egressIPName string) ([]libovsdb.Operation, error) {
+	nats := make([]*nbdb.NAT, 0, len(podIPs))
+	var nat *nbdb.NAT
+	var err error
+	for _, podIP := range podIPs {
+		if (utilnet.IsIPv6String(status.EgressIP) && utilnet.IsIPv6(podIP)) || (!utilnet.IsIPv6String(status.EgressIP) && !utilnet.IsIPv6(podIP)) {
+			nat, err = buildSNAT(podIP, status, egressIPName)
+			if err != nil {
+				return nil, err
+			}
+			nats = append(nats, nat)
+		}
+	}
+	routerName := util.GetGatewayRouterFromNode(status.Node)
+	ops, err = libovsdbops.AddOrUpdateNatsToRouterOps(nbClient, ops, routerName, nats...)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create snat rules, for router: %s, error: %v", routerName, err)
+	}
+	return ops, nil
+}
+
+func deleteNATRuleOps(nbClient libovsdbclient.Client, ops []libovsdb.Operation, podIPs []net.IP, status egressipv1.EgressIPStatusItem, egressIPName string) ([]libovsdb.Operation, error) {
+	nats := make([]*nbdb.NAT, 0, len(podIPs))
+	var nat *nbdb.NAT
+	var err error
+	for _, podIP := range podIPs {
+		if (utilnet.IsIPv6String(status.EgressIP) && utilnet.IsIPv6(podIP)) || (!utilnet.IsIPv6String(status.EgressIP) && !utilnet.IsIPv6(podIP)) {
+			nat, err = buildSNAT(podIP, status, egressIPName)
+			if err != nil {
+				return nil, err
+			}
+			nats = append(nats, nat)
+		}
+	}
+	routerName := util.GetGatewayRouterFromNode(status.Node)
+	ops, err = libovsdbops.DeleteNatsFromRouterOps(nbClient, ops, routerName, nats...)
+	if err != nil {
+		return nil, fmt.Errorf("unable to remove snat rules for router: %s, error: %v", routerName, err)
+	}
+	return ops, nil
 }
 
 func getEgressIPKey(eIP *egressipv1.EgressIP) string {

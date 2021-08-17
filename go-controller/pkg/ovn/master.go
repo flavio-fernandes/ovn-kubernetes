@@ -183,7 +183,7 @@ func (oc *Controller) upgradeToSingleSwitchOVNTopology(existingNodeList *kapi.No
 
 		// for all nodes include the ones that were deleted, delete its gateway entities.
 		// See comments above the multiJoinSwitchGatewayCleanup() function for details.
-		err = multiJoinSwitchGatewayCleanup(nodeName, upgradeOnly)
+		err = multiJoinSwitchGatewayCleanup(oc.nbClient, nodeName, upgradeOnly)
 		if err != nil {
 			return err
 		}
@@ -208,7 +208,7 @@ func (oc *Controller) upgradeOVNTopology(existingNodes *kapi.NodeList) error {
 	}
 	// If version is less than Host -> Service with OpenFlow, we need to remove and cleanup DGP
 	if err == nil && ver < types.OvnHostToSvcOFTopoVersion && config.Gateway.Mode == config.GatewayModeShared {
-		err = cleanupDGP(existingNodes)
+		err = cleanupDGP(oc.nbClient, existingNodes)
 	}
 	return err
 }
@@ -593,7 +593,7 @@ func (oc *Controller) syncGatewayLogicalNetwork(node *kapi.Node, l3GatewayConfig
 	}
 
 	drLRPIPs, _ := oc.joinSwIPManager.getJoinLRPCacheIPs(types.OVNClusterRouter)
-	err = gatewayInit(node.Name, clusterSubnets, hostSubnets, l3GatewayConfig, oc.SCTPSupport, gwLRPIPs, drLRPIPs)
+	err = gatewayInit(oc.nbClient, node.Name, clusterSubnets, hostSubnets, l3GatewayConfig, oc.SCTPSupport, gwLRPIPs, drLRPIPs)
 	if err != nil {
 		return fmt.Errorf("failed to init shared interface gateway: %v", err)
 	}
@@ -1074,7 +1074,7 @@ func (oc *Controller) deleteNode(nodeName string, hostSubnets []*net.IPNet, node
 		klog.Errorf("Error deleting node %s logical network: %v", nodeName, err)
 	}
 
-	if err := gatewayCleanup(nodeName); err != nil {
+	if err := gatewayCleanup(oc.nbClient, nodeName); err != nil {
 		klog.Errorf("Failed to clean up node %s gateway: (%v)", nodeName, err)
 	}
 

@@ -5,7 +5,10 @@ import (
 	"net"
 	"strings"
 
+	libovsdbclient "github.com/ovn-org/libovsdb/client"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/nbdb"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/libovsdbops"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/types"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
 
@@ -16,7 +19,7 @@ import (
 )
 
 // gatewayInit creates a gateway router for the local chassis.
-func gatewayInit(nodeName string, clusterIPSubnet []*net.IPNet, hostSubnets []*net.IPNet,
+func gatewayInit(nbClient libovsdbclient.Client, nodeName string, clusterIPSubnet []*net.IPNet, hostSubnets []*net.IPNet,
 	l3GatewayConfig *util.L3GatewayConfig, sctpSupport bool, gwLRPIfAddrs, drLRPIfAddrs []*net.IPNet) error {
 
 	gwLRPIPs := make([]net.IP, 0)
@@ -208,6 +211,8 @@ func gatewayInit(nodeName string, clusterIPSubnet []*net.IPNet, hostSubnets []*n
 	// if config.Gateway.DisabledSNATMultipleGWs is not set (by default it is not),
 	// the NAT rules for pods not having annotations to route through either external
 	// gws or pod CNFs will be added within pods.go addLogicalPort
+	nats := make([]*nbdb.NAT, 0, len(clusterIPSubnet))
+	var nat *nbdb.NAT
 	if !config.Gateway.DisableSNATMultipleGWs && config.Gateway.Mode != config.GatewayModeLocal {
 		// Default SNAT rules.
 		externalIPs := make([]net.IP, len(l3GatewayConfig.IPAddresses))
@@ -220,20 +225,30 @@ func gatewayInit(nodeName string, clusterIPSubnet []*net.IPNet, hostSubnets []*n
 				return fmt.Errorf("failed to create default SNAT rules for gateway router %s: %v",
 					gatewayRouter, err)
 			}
-			if err := util.UpdateRouterSNAT(gatewayRouter, externalIP[0], entry); err != nil {
+			nat, err = libovsdbops.BuildRouterSNAT(&externalIP[0], entry, "", nil)
+			if err != nil {
 				return fmt.Errorf("failed to update NAT entry for pod subnet: %s, GR: %s, error: %v",
-					entry.String(), gatewayRouter, err)
+				entry.String(), gatewayRouter, err)
 			}
+			nats = append(nats, nat)
+		}
+		err = libovsdbops.AddOrUpdateNatsToRouter(nbClient, gatewayRouter, nats...)
+		if err != nil {
+			return fmt.Errorf("failed to update SNAT rule for pod on router %s error: %v", gatewayRouter, err)
 		}
 	} else {
 		// ensure we do not have any leftover SNAT entries after an upgrade
 		for _, logicalSubnet := range clusterIPSubnet {
-			_, stderr, err = util.RunOVNNbctl("--if-exists", "lr-nat-del", gatewayRouter, "snat",
-				logicalSubnet.String())
+			nat, err = libovsdbops.BuildRouterSNAT(nil, logicalSubnet, "", nil)
 			if err != nil {
 				return fmt.Errorf("failed to delete GW SNAT rule for pod on router %s, for subnet: %s, "+
-					"stderr: %q, error: %v", gatewayRouter, logicalSubnet, stderr, err)
+					"error: %v", gatewayRouter, logicalSubnet, err)
 			}
+			nats = append(nats, nat)
+		}
+		err = libovsdbops.DeleteNatsFromRouter(nbClient, gatewayRouter, nats...)
+		if err != nil {
+			return fmt.Errorf("failed to delete GW SNAT rule for pod on router %s error: %v", gatewayRouter, err)
 		}
 	}
 	return nil

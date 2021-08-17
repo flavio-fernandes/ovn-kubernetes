@@ -42,12 +42,17 @@ func buildRouterNAT(
 }
 
 func BuildRouterSNAT(
-	externalIP net.IP,
+	externalIP *net.IP,
 	logicalIP *net.IPNet,
+	logicalPort string,
 	externalIDs *map[string]string,
 ) (*nbdb.NAT, error) {
 	if logicalIP == nil {
-		return nil, fmt.Errorf("logicalIP cannot be nil when building NAT")
+		return nil, fmt.Errorf("logicalIP cannot be nil when building SNAT")
+	}
+	externalIPStr := ""
+	if externalIP != nil {
+		externalIPStr = externalIP.String()
 	}
 	// Strip out mask of logicalIP only if it is a host mask
 	logicalIPMask, _ := logicalIP.Mask.Size()
@@ -55,23 +60,31 @@ func BuildRouterSNAT(
 	if logicalIPMask != 32 && logicalIPMask != 128 {
 		logicalIPStr = logicalIP.String()
 	}
-	return buildRouterNAT(nbdb.NATTypeSNAT, externalIP.String(), logicalIPStr, "", "", externalIDs), nil
+	return buildRouterNAT(nbdb.NATTypeSNAT, externalIPStr, logicalIPStr, logicalPort, "", externalIDs), nil
 }
 
 func BuildRouterDNATAndSNAT(
-	externalIP net.IP,
+	externalIP *net.IP,
 	logicalIP *net.IPNet,
 	logicalPort string,
 	externalMac string,
 	externalIDs *map[string]string,
-) (*nbdb.NAT, error) {	
-	if logicalIP == nil {
-		return nil, fmt.Errorf("logicalIP cannot be nil when building NAT")
+) (*nbdb.NAT, error) {
+	if externalIP == nil && logicalPort == "" {
+		return nil, fmt.Errorf("externalIP cannot be nil when building DNAT types w/out logicalPort")
+	}
+	externalIPStr := ""
+	if externalIP != nil {
+		externalIPStr = externalIP.String()
+	}
+	logicalIPStr := ""
+	if logicalIP != nil {
+		logicalIPStr = logicalIP.IP.String()
 	}
 	return buildRouterNAT(
 		nbdb.NATTypeDNATAndSNAT,
-		externalIP.String(),
-		logicalIP.IP.String(),
+		externalIPStr,
+		logicalIPStr,
 		logicalPort,
 		externalMac,
 		externalIDs),
@@ -88,14 +101,27 @@ func isEquivalentNAT(existing *nbdb.NAT, searched *nbdb.NAT) bool {
 		return false
 	}
 
-	if searched.ExternalIP != existing.ExternalIP {
-		return false
+	// If searching based on type and logicalPort, no need to look any further.
+	if searched.LogicalPort != nil {
+		return existing.LogicalPort != nil && *searched.LogicalPort == *existing.LogicalPort
+	}
+
+	// Allow externalIP to be empty if type is SNAT.
+	if (searched.ExternalIP != "" || searched.Type != nbdb.NATTypeSNAT) &&
+		searched.ExternalIP != existing.ExternalIP {
+			return false
 	}
 
 	// Compare logicalIP only for SNAT, since DNAT types must have unique ExternalIP.
 	if searched.Type == nbdb.NATTypeSNAT && searched.LogicalIP != existing.LogicalIP {
 		return false
 	}
+
+    for externalIdKey, externalIdValue := range searched.ExternalIDs {
+        if foundValue, found := existing.ExternalIDs[externalIdKey]; !found || foundValue != externalIdValue {
+            return false
+        }
+    }
 
 	return true
 }
@@ -156,9 +182,9 @@ func addOrUpdateNatToRouterOps(nbClient libovsdbclient.Client, ops []libovsdb.Op
 	if natIndex == -1 {
 		nat.UUID = buildNamedUUID(fmt.Sprintf("nat_%s_%s_%s", nat.Type, nat.ExternalIP, nat.LogicalIP))
 
-		op, err := nbClient.Create(nat)
+		op, err := nbClient.Create(&nat)
 		if err != nil {
-			return nil, fmt.Errorf("error creating NAT %s for logical router %s: %v", nat.UUID, router.Name, err)
+			return nil, fmt.Errorf("error creating NAT %s for logical router %s %#v : %v", nat.UUID, router.Name, nat, err)
 		}
 		ops = append(ops, op...)
 
@@ -166,7 +192,7 @@ func addOrUpdateNatToRouterOps(nbClient libovsdbclient.Client, ops []libovsdb.Op
 			{
 				Field:   &router.Nat,
 				Mutator: libovsdb.MutateOperationInsert,
-				Value:   nat.UUID,
+				Value:   []string{nat.UUID},
 			},
 		}
 		mutateOp, err := nbClient.Where(router).Mutate(router, mutations...)
@@ -178,7 +204,7 @@ func addOrUpdateNatToRouterOps(nbClient libovsdbclient.Client, ops []libovsdb.Op
 		op, err := nbClient.Where(
 			&nbdb.NAT{
 				UUID: routerNats[natIndex].UUID,
-			}).Update(nat)
+			}).Update(&nat)
 		if err != nil {
 			return nil, fmt.Errorf("error updating NAT %s for logical router %s: %v", routerNats[natIndex].UUID, router.Name, err)
 		}
@@ -255,4 +281,24 @@ func DeleteNatsFromRouterOps(nbClient libovsdbclient.Client, ops []libovsdb.Oper
 	}
 
 	return ops, nil
+}
+
+func AddOrUpdateNatsToRouter(nbClient libovsdbclient.Client, routerName string, nats ...*nbdb.NAT) error {
+	ops, err := AddOrUpdateNatsToRouterOps(nbClient, nil, routerName, nats...)
+	if err != nil {
+		return err
+	}
+
+	_, err = TransactAndCheck(nbClient, ops)
+	return err
+}
+
+func DeleteNatsFromRouter(nbClient libovsdbclient.Client, routerName string, nats ...*nbdb.NAT) error {
+	ops, err := DeleteNatsFromRouterOps(nbClient, nil, routerName, nats...)
+	if err != nil {
+		return err
+	}
+
+	_, err = TransactAndCheck(nbClient, ops)
+	return err
 }
