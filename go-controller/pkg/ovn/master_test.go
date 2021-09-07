@@ -66,16 +66,6 @@ type tNode struct {
 	DnatSnatIP           string
 }
 
-func cleanupPBRandNATRules(fexec *ovntest.FakeExec, nodeName string) {
-	fexec.AddFakeCmd(&ovntest.ExpectedCmd{
-		Cmd:    "ovn-nbctl --timeout=15 --data=bare --no-heading --columns=external_ip find nat logical_port=" + types.K8sPrefix + nodeName,
-		Output: "External_IP",
-	})
-	fexec.AddFakeCmdsNoOutputNoError([]string{
-		"ovn-nbctl --timeout=15 --if-exists lr-nat-del " + types.OVNClusterRouter + " dnat_and_snat External_IP",
-	})
-}
-
 func cleanupGateway(fexec *ovntest.FakeExec, nodeName string, nodeSubnet string, clusterCIDR string, nextHop string) {
 	const (
 		node1RouteUUID    string = "0cac12cf-3e0f-4682-b028-5ea2e0001962"
@@ -98,8 +88,6 @@ func cleanupGateway(fexec *ovntest.FakeExec, nodeName string, nodeSubnet string,
 		"ovn-nbctl --timeout=15 --if-exist lr-del " + types.GWRouterPrefix + nodeName,
 		"ovn-nbctl --timeout=15 --if-exist ls-del " + types.ExternalSwitchPrefix + nodeName,
 	})
-
-	cleanupPBRandNATRules(fexec, nodeName)
 }
 
 func defaultFakeExec(nodeSubnet, nodeName string, sctpSupport bool) *ovntest.FakeExec {
@@ -236,7 +224,6 @@ func addNodeLogicalFlows(testData []libovsdb.TestData, expectedOVNClusterRouter 
 		"ovn-nbctl --timeout=15 --if-exists lrp-del " + types.RouterToSwitchPrefix + node.Name + " -- lrp-add ovn_cluster_router " + types.RouterToSwitchPrefix + node.Name + " " + node.NodeLRPMAC + " " + node.NodeGWIP + " -- lrp-set-gateway-chassis " + types.RouterToSwitchPrefix + node.Name + " " + node.SystemID + " 1",
 	})
 
-	addPBRandNATRules(fexec, node, clusterCIDR)
 	matchStr1 := fmt.Sprintf(`inport == "rtos-%s" && ip4.dst == %s /* %s */`, node.Name, node.GatewayRouterIP, node.Name)
 	matchStr2 := fmt.Sprintf(`inport == "rtos-%s" && ip4.dst == 9.9.9.9 /* %s */`, node.Name, node.Name)
 	intPriority, _ := strconv.Atoi(types.NodeSubnetPolicyPriority)
@@ -759,14 +746,6 @@ subnet=%s
 })
 */
 
-func addPBRandNATRules(fexec *ovntest.FakeExec, node *tNode, clusterCIDR string) {
-	fexec.AddFakeCmdsNoOutputNoError([]string{
-		fmt.Sprintf("ovn-nbctl --timeout=15 --columns _uuid --format=csv --no-headings find nat external_ip=\"%s\" type=snat logical_ip=\"%s\"", node.GatewayRouterIP, clusterCIDR),
-		"ovn-nbctl --timeout=15 --if-exists lr-nat-del " + node.GWRouter + " snat " + clusterCIDR,
-		"ovn-nbctl --timeout=15 lr-nat-add " + node.GWRouter + " snat " + node.GatewayRouterIP + " " + clusterCIDR,
-	})
-}
-
 var _ = ginkgo.Describe("Gateway Init Operations", func() {
 	var (
 		app      *cli.App
@@ -1109,7 +1088,6 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 
 			expectedDatabaseState := []libovsdb.TestData{}
 			expectedDatabaseState = addNodeLogicalFlows(expectedDatabaseState, expectedOVNClusterRouter, expectedNodeSwitch, fexec, &node1, clusterCIDR, config.IPv6Mode)
-			addPBRandNATRules(fexec, &node1, clusterCIDR)
 
 			clusterController := NewOvnController(fakeClient, f, stopChan, addressset.NewFakeAddressSetFactory(),
 				ovntest.NewMockOVNClient(goovn.DBNB), ovntest.NewMockOVNClient(goovn.DBSB),
@@ -1153,7 +1131,8 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 			}
 
 			gomega.Eventually(fexec.CalledMatchesExpected()).Should(gomega.BeTrue(), fexec.ErrorDesc)
-			expectedDatabaseState = generateGatewayInitExpectedNB(expectedDatabaseState, expectedOVNClusterRouter, expectedNodeSwitch, node1.Name, clusterSubnets, []*net.IPNet{subnet}, l3Config, []*net.IPNet{joinLRPIPs}, []*net.IPNet{dLRPIPs})
+			noSnat := false
+			expectedDatabaseState = generateGatewayInitExpectedNB(expectedDatabaseState, expectedOVNClusterRouter, expectedNodeSwitch, node1.Name, clusterSubnets, []*net.IPNet{subnet}, l3Config, []*net.IPNet{joinLRPIPs}, []*net.IPNet{dLRPIPs}, noSnat)
 
 			gomega.Eventually(libovsdbOvnNBClient).Should(libovsdbtest.HaveData(expectedDatabaseState))
 

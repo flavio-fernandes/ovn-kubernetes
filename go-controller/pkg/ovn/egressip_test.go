@@ -275,12 +275,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				gomega.Eventually(isEgressAssignableNode(node1.Name)).Should(gomega.BeTrue())
 				gomega.Eventually(isEgressAssignableNode(node2.Name)).Should(gomega.BeFalse())
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
-
 				fakeOvn.controller.WatchEgressIP()
 				gomega.Eventually(getEgressIPStatusLen(egressIPName)).Should(gomega.Equal(1))
 				statuses := getEgressIPStatus(egressIPName)
@@ -309,12 +303,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				statuses = getEgressIPStatus(egressIPName)
 				gomega.Expect(statuses[0].EgressIP).To(gomega.Equal(egressIP))
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid find nat external_ids:name=%s logical_ip=\"%s\" external_ip=\"%s\"", eIP.Name, egressPod.Status.PodIP, egressIP),
-						fmt.Sprintf("ovn-nbctl --timeout=15 --id=@nat create nat type=snat %s %s %s %s -- add logical_router GR_%s nat @nat", fmt.Sprintf("logical_port=k8s-%s", node2.Name), fmt.Sprintf("external_ip=\"%s\"", egressIP), fmt.Sprintf("logical_ip=\"%s\"", egressPod.Status.PodIP), fmt.Sprintf("external_ids:name=%s", eIP.Name), node2.Name),
-					},
-				)
 				_, err = fakeOvn.fakeClient.KubeClient.CoreV1().Pods(egressPod.Namespace).Create(context.TODO(), &egressPod, metav1.CreateOptions{})
 
 				expectedDatabaseState := []libovsdbtest.TestData{
@@ -454,12 +442,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				gomega.Eventually(isEgressAssignableNode(node1.Name)).Should(gomega.BeTrue())
 				gomega.Eventually(isEgressAssignableNode(node2.Name)).Should(gomega.BeFalse())
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
-
 				fakeOvn.controller.WatchEgressIP()
 				gomega.Eventually(getEgressIPStatusLen(egressIPName)).Should(gomega.Equal(1))
 				statuses := getEgressIPStatus(egressIPName)
@@ -488,12 +470,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				statuses = getEgressIPStatus(egressIPName)
 				gomega.Expect(statuses[0].EgressIP).To(gomega.Equal(egressIP))
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid find nat external_ids:name=%s logical_ip=\"%s\" external_ip=\"%s\"", eIP.Name, egressPod.Status.PodIP, egressIP),
-						fmt.Sprintf("ovn-nbctl --timeout=15 --id=@nat create nat type=snat %s %s %s %s -- add logical_router GR_%s nat @nat", fmt.Sprintf("logical_port=k8s-%s", node2.Name), fmt.Sprintf("external_ip=\"%s\"", egressIP), fmt.Sprintf("logical_ip=\"%s\"", egressPod.Status.PodIP), fmt.Sprintf("external_ids:name=%s", eIP.Name), node2.Name),
-					},
-				)
 				_, err = fakeOvn.fakeClient.KubeClient.CoreV1().Namespaces().Create(context.TODO(), egressNamespace, metav1.CreateOptions{})
 				gomega.Expect(err).NotTo(gomega.HaveOccurred())
 				gomega.Eventually(func() int {
@@ -599,19 +575,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 					},
 				}
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid find nat external_ids:name=%s logical_ip=\"%s\" external_ip=\"%s\"", eIP.Name, egressPod.Status.PodIP, egressIP),
-						fmt.Sprintf("ovn-nbctl --timeout=15 --id=@nat create nat type=snat %s %s %s %s -- add logical_router GR_%s nat @nat", fmt.Sprintf("logical_port=k8s-%s", node2.name), fmt.Sprintf("external_ip=\"%s\"", egressIP), fmt.Sprintf("logical_ip=\"%s\"", egressPod.Status.PodIP), fmt.Sprintf("external_ids:name=%s", eIP.Name), node2.name),
-					},
-				)
-
 				fakeOvn.controller.WatchEgressIP()
 
 				_, err := fakeOvn.fakeClient.EgressIPClient.K8sV1().EgressIPs().Create(context.TODO(), &eIP, metav1.CreateOptions{})
@@ -651,17 +614,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 
 				podUpdate := newPod(namespace, podName, node1Name, podV6IP)
 
-				fakeOvn.fakeExec.AddFakeCmd(
-					&ovntest.ExpectedCmd{
-						Cmd:    fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid find nat %s %s %s", fmt.Sprintf("external_ids:name=%s", egressIPName), fmt.Sprintf("logical_ip=\"%s\"", egressPod.Status.PodIP), fmt.Sprintf("external_ip=\"%s\"", egressIP.String())),
-						Output: natID,
-					},
-				)
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 remove logical_router GR_%s nat %s", node2.name, natID),
-					},
-				)
 				_, err = fakeOvn.fakeClient.KubeClient.CoreV1().Pods(egressPod.Namespace).Update(context.TODO(), podUpdate, metav1.UpdateOptions{})
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				gomega.Eventually(getEgressIPStatusLen(eIP.Name)).Should(gomega.Equal(1))
@@ -740,19 +692,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 						},
 					},
 				}
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid find nat external_ids:name=%s logical_ip=\"%s\" external_ip=\"%s\"", eIP.Name, egressPod.Status.PodIP, egressIP),
-						fmt.Sprintf("ovn-nbctl --timeout=15 --id=@nat create nat type=snat %s %s %s %s -- add logical_router GR_%s nat @nat", fmt.Sprintf("logical_port=k8s-%s", node2.name), fmt.Sprintf("external_ip=\"%s\"", egressIP), fmt.Sprintf("logical_ip=\"%s\"", egressPod.Status.PodIP), fmt.Sprintf("external_ids:name=%s", eIP.Name), node2.name),
-					},
-				)
 
 				fakeOvn.controller.WatchEgressIP()
 
@@ -862,12 +801,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 					},
 				}
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
-
 				fakeOvn.controller.WatchEgressIP()
 
 				_, err := fakeOvn.fakeClient.EgressIPClient.K8sV1().EgressIPs().Create(context.TODO(), &eIP, metav1.CreateOptions{})
@@ -880,13 +813,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				gomega.Expect(statuses[0].EgressIP).To(gomega.Equal(egressIP.String()))
 
 				podUpdate := newPodWithLabels(namespace, podName, node1Name, podV6IP, egressPodLabel)
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid find nat external_ids:name=%s logical_ip=\"%s\" external_ip=\"%s\"", eIP.Name, podV6IP, egressIP),
-						fmt.Sprintf("ovn-nbctl --timeout=15 --id=@nat create nat type=snat %s %s %s %s -- add logical_router GR_%s nat @nat", fmt.Sprintf("logical_port=k8s-%s", node2.name), fmt.Sprintf("external_ip=\"%s\"", egressIP), fmt.Sprintf("logical_ip=\"%s\"", podV6IP), fmt.Sprintf("external_ids:name=%s", eIP.Name), node2.name),
-					},
-				)
 
 				_, err = fakeOvn.fakeClient.KubeClient.CoreV1().Pods(egressPod.Namespace).Update(context.TODO(), podUpdate, metav1.UpdateOptions{})
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
@@ -960,12 +886,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 						},
 					},
 				}
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 
 				fakeOvn.controller.WatchEgressIP()
 
@@ -1043,19 +963,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 					},
 				}
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid find nat external_ids:name=%s logical_ip=\"%s\" external_ip=\"%s\"", eIP.Name, egressPod.Status.PodIP, egressIP),
-						fmt.Sprintf("ovn-nbctl --timeout=15 --id=@nat create nat type=snat %s %s %s %s -- add logical_router GR_%s nat @nat", fmt.Sprintf("logical_port=k8s-%s", node2.name), fmt.Sprintf("external_ip=\"%s\"", egressIP), fmt.Sprintf("logical_ip=\"%s\"", egressPod.Status.PodIP), fmt.Sprintf("external_ids:name=%s", eIP.Name), node2.name),
-					},
-				)
-
 				fakeOvn.controller.WatchEgressIP()
 
 				_, err := fakeOvn.fakeClient.EgressIPClient.K8sV1().EgressIPs().Create(context.TODO(), &eIP, metav1.CreateOptions{})
@@ -1093,18 +1000,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				gomega.Expect(statuses[0].EgressIP).To(gomega.Equal(egressIP.String()))
 
 				namespaceUpdate := newNamespace(namespace)
-
-				fakeOvn.fakeExec.AddFakeCmd(
-					&ovntest.ExpectedCmd{
-						Cmd:    fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid find nat %s %s %s", fmt.Sprintf("external_ids:name=%s", egressIPName), fmt.Sprintf("logical_ip=\"%s\"", egressPod.Status.PodIP), fmt.Sprintf("external_ip=\"%s\"", egressIP.String())),
-						Output: natID,
-					},
-				)
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 remove logical_router GR_%s nat %s", node2.name, natID),
-					},
-				)
 
 				_, err = fakeOvn.fakeClient.KubeClient.CoreV1().Namespaces().Update(context.TODO(), namespaceUpdate, metav1.UpdateOptions{})
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
@@ -1166,12 +1061,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 						},
 					},
 				}
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 
 				fakeOvn.controller.WatchEgressIP()
 
@@ -1251,19 +1140,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 					},
 				}
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid find nat external_ids:name=%s logical_ip=\"%s\" external_ip=\"%s\"", eIP.Name, egressPod.Status.PodIP, egressIP),
-						fmt.Sprintf("ovn-nbctl --timeout=15 --id=@nat create nat type=snat %s %s %s %s -- add logical_router GR_%s nat @nat", fmt.Sprintf("logical_port=k8s-%s", node2.name), fmt.Sprintf("external_ip=\"%s\"", egressIP), fmt.Sprintf("logical_ip=\"%s\"", egressPod.Status.PodIP), fmt.Sprintf("external_ids:name=%s", eIP.Name), node2.name),
-					},
-				)
-
 				fakeOvn.controller.WatchEgressIP()
 
 				_, err := fakeOvn.fakeClient.EgressIPClient.K8sV1().EgressIPs().Create(context.TODO(), &eIP, metav1.CreateOptions{})
@@ -1314,24 +1190,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 						MatchLabels: egressPodLabel,
 					},
 				}
-
-				fakeOvn.fakeExec.AddFakeCmd(
-					&ovntest.ExpectedCmd{
-						Cmd:    fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid find nat %s %s %s", fmt.Sprintf("external_ids:name=%s", egressIPName), fmt.Sprintf("logical_ip=\"%s\"", egressPod.Status.PodIP), fmt.Sprintf("external_ip=\"%s\"", egressIP.String())),
-						Output: natID,
-					},
-				)
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 remove logical_router GR_%s nat %s", node2.name, natID),
-					},
-				)
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid find nat external_ids:name=%s logical_ip=\"%s\" external_ip=\"%s\"", eIP.Name, egressPod.Status.PodIP, updatedEgressIP.String()),
-						fmt.Sprintf("ovn-nbctl --timeout=15 --id=@nat create nat type=snat %s %s %s %s -- add logical_router GR_%s nat @nat", fmt.Sprintf("logical_port=k8s-%s", node2.name), fmt.Sprintf("external_ip=\"%s\"", updatedEgressIP.String()), fmt.Sprintf("logical_ip=\"%s\"", egressPod.Status.PodIP), fmt.Sprintf("external_ids:name=%s", eIP.Name), node2.name),
-					},
-				)
 
 				_, err = fakeOvn.fakeClient.EgressIPClient.K8sV1().EgressIPs().Update(context.TODO(), eIPUpdate, metav1.UpdateOptions{})
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
@@ -1400,19 +1258,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 						},
 					},
 				}
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid find nat external_ids:name=%s logical_ip=\"%s\" external_ip=\"%s\"", eIP.Name, egressPod.Status.PodIP, egressIP.String()),
-						fmt.Sprintf("ovn-nbctl --timeout=15 --id=@nat create nat type=snat %s %s %s %s -- add logical_router GR_%s nat @nat", fmt.Sprintf("logical_port=k8s-%s", node2.name), fmt.Sprintf("external_ip=\"%s\"", egressIP.String()), fmt.Sprintf("logical_ip=\"%s\"", egressPod.Status.PodIP), fmt.Sprintf("external_ids:name=%s", eIP.Name), node2.name),
-					},
-				)
 
 				fakeOvn.controller.WatchEgressIP()
 
@@ -1683,11 +1528,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 						Items: []v1.Node{node},
 					})
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 				fakeOvn.controller.WatchEgressNodes()
 				fakeOvn.controller.WatchEgressIP()
 
@@ -1828,11 +1668,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 					},
 				)
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 				fakeOvn.controller.WatchEgressNodes()
 				fakeOvn.controller.WatchEgressIP()
 
@@ -1944,11 +1779,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 					},
 				)
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 				fakeOvn.controller.WatchEgressNodes()
 				fakeOvn.controller.WatchEgressIP()
 
@@ -2100,25 +1930,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 					},
 				)
 
-				fakeOvn.fakeExec.AddFakeCmd(
-					&ovntest.ExpectedCmd{
-						Cmd:    fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid find nat external_ids:name=%s logical_ip=\"%s\" external_ip=\"%s\"", eIP.Name, egressPod.Status.PodIP, egressIP1),
-						Output: "nat-id",
-					},
-				)
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 remove logical_router %s%s nat nat-id", types.GWRouterPrefix, node1.Name),
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid find nat external_ids:name=%s logical_ip=\"%s\" external_ip=\"%s\"", eIP.Name, egressPod.Status.PodIP, egressIP1),
-						fmt.Sprintf("ovn-nbctl --timeout=15 --id=@nat create nat type=snat %s %s %s %s -- add logical_router GR_%s nat @nat", fmt.Sprintf("logical_port=k8s-%s", node2.Name), fmt.Sprintf("external_ip=\"%s\"", egressIP1), fmt.Sprintf("logical_ip=\"%s\"", egressPod.Status.PodIP), fmt.Sprintf("external_ids:name=%s", eIP.Name), node2.Name),
-					},
-				)
 				fakeOvn.controller.WatchEgressNodes()
 				fakeOvn.controller.WatchEgressIP()
 
@@ -2223,23 +2034,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
 					[]string{
 						fmt.Sprintf("ovn-nbctl --timeout=15 set logical_switch_port etor-GR_%s options:nat-addresses=router", node1.Name),
-					},
-				)
-				fakeOvn.fakeExec.AddFakeCmd(
-					&ovntest.ExpectedCmd{
-						Cmd:    fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-						Output: fmt.Sprintf("nat-id,name=%s,10.128.3.8", eIP.Name),
-					},
-				)
-				fakeOvn.fakeExec.AddFakeCmd(
-					&ovntest.ExpectedCmd{
-						Cmd:    fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=name find logical_router nat{>=}nat-id"),
-						Output: fmt.Sprintf("%s%s", types.GWRouterPrefix, node1.Name),
-					},
-				)
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 remove logical_router %s%s nat nat-id", types.GWRouterPrefix, node1.Name),
 					},
 				)
 
@@ -2354,11 +2148,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 						Items: []v1.Node{node1, node2},
 					})
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 				fakeOvn.controller.WatchEgressNodes()
 				fakeOvn.controller.WatchEgressIP()
 
@@ -2504,12 +2293,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 					&v1.NodeList{
 						Items: []v1.Node{node1, node2},
 					})
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 
 				fakeOvn.controller.WatchEgressNodes()
 				fakeOvn.controller.WatchEgressIP()
@@ -2657,12 +2440,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 					[]string{
 						fmt.Sprintf("ovn-nbctl --timeout=15 set logical_switch_port etor-GR_node1 options:nat-addresses=router"),
 						fmt.Sprintf("ovn-nbctl --timeout=15 set logical_switch_port etor-GR_node2 options:nat-addresses=router"),
-					},
-				)
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
 					},
 				)
 
@@ -3153,11 +2930,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 					},
 				}
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 				fakeOvn.controller.WatchEgressIP()
 
 				_, err := fakeOvn.fakeClient.EgressIPClient.K8sV1().EgressIPs().Create(context.TODO(), &eIP, metav1.CreateOptions{})
@@ -3195,11 +2967,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 					},
 				}
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 				fakeOvn.controller.WatchEgressIP()
 
 				_, err := fakeOvn.fakeClient.EgressIPClient.K8sV1().EgressIPs().Create(context.TODO(), &eIP, metav1.CreateOptions{})
@@ -3238,11 +3005,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 					},
 				}
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 				fakeOvn.controller.WatchEgressIP()
 
 				_, err := fakeOvn.fakeClient.EgressIPClient.K8sV1().EgressIPs().Create(context.TODO(), &eIP, metav1.CreateOptions{})
@@ -3302,11 +3064,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				fakeOvn.controller.eIPC.allocator[node1.name] = &node1
 				fakeOvn.controller.eIPC.allocator[node2.name] = &node2
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 				fakeOvn.controller.WatchEgressIP()
 
 				gomega.Eventually(getEgressIPStatusLen(egressIPName)).Should(gomega.Equal(2))
@@ -3360,11 +3117,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				fakeOvn.controller.eIPC.allocator[node1.name] = &node1
 				fakeOvn.controller.eIPC.allocator[node2.name] = &node2
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 				fakeOvn.controller.WatchEgressIP()
 
 				gomega.Eventually(getEgressIPStatusLen(egressIPName)).Should(gomega.Equal(2))
@@ -3412,12 +3164,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 
 				fakeOvn.controller.eIPC.allocator[node1.name] = &node1
 				fakeOvn.controller.eIPC.allocator[node2.name] = &node2
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 
 				fakeOvn.controller.WatchEgressIP()
 
@@ -3473,11 +3219,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				fakeOvn.controller.eIPC.allocator[node1.name] = &node1
 				fakeOvn.controller.eIPC.allocator[node2.name] = &node2
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 				fakeOvn.controller.WatchEgressIP()
 
 				gomega.Eventually(getEgressIPStatusLen(egressIPName)).Should(gomega.Equal(2))
@@ -3527,11 +3268,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				fakeOvn.controller.eIPC.allocator[node1.name] = &node1
 				fakeOvn.controller.eIPC.allocator[node2.name] = &node2
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 				fakeOvn.controller.WatchEgressIP()
 
 				gomega.Eventually(getEgressIPStatusLen(egressIPName)).Should(gomega.Equal(1))
@@ -3579,11 +3315,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				fakeOvn.controller.eIPC.allocator[node1.name] = &node1
 				fakeOvn.controller.eIPC.allocator[node2.name] = &node2
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 				fakeOvn.controller.WatchEgressIP()
 
 				gomega.Eventually(getEgressIPStatusLen(egressIPName)).Should(gomega.Equal(1))
@@ -3630,11 +3361,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				fakeOvn.controller.eIPC.allocator[node1.name] = &node1
 				fakeOvn.controller.eIPC.allocator[node2.name] = &node2
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 				fakeOvn.controller.WatchEgressIP()
 
 				gomega.Eventually(getEgressIPStatusLen(egressIPName)).Should(gomega.Equal(1))
@@ -3677,11 +3403,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				fakeOvn.controller.eIPC.allocator[node1.name] = &node1
 				fakeOvn.controller.eIPC.allocator[node2.name] = &node2
 
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 				fakeOvn.controller.WatchEgressIP()
 
 				_, err := fakeOvn.fakeClient.EgressIPClient.K8sV1().EgressIPs().Create(context.TODO(), &eIP1, metav1.CreateOptions{})
@@ -3725,12 +3446,6 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 					},
 				}
 				fakeOvn.start(ctx)
-
-				fakeOvn.fakeExec.AddFakeCmdsNoOutputNoError(
-					[]string{
-						fmt.Sprintf("ovn-nbctl --timeout=15 --format=csv --data=bare --no-heading --columns=_uuid,external_ids,logical_ip find nat"),
-					},
-				)
 
 				fakeOvn.controller.eIPC.allocator[node1.name] = &node1
 				fakeOvn.controller.eIPC.allocator[node2.name] = &node2
