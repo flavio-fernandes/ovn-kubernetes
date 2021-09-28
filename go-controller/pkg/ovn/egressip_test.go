@@ -305,6 +305,26 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 
 				_, err = fakeOvn.fakeClient.KubeClient.CoreV1().Pods(egressPod.Namespace).Create(context.TODO(), &egressPod, metav1.CreateOptions{})
 
+
+
+
+
+				/*
+				   Since I removed this [1], I would expect that the LogicalRouter below would have the NAT. Yet, it does not!
+				   Is it a bug I introduced?!? Or is the fake call never really happening?
+				   [1]:
+				    https://github.com/ovn-org/ovn-kubernetes/pull/2421/files#r717637423
+				    fmt.Sprintf("ovn-nbctl --timeout=15 --id=@nat create nat type=snat %s %s %s %s -- add logical_router GR_%s nat @nat", fmt.Sprintf("logical_port=k8s-%s", node2.Name), fmt.Sprintf("external_ip=\"%s\"", egressIP), fmt.Sprintf("logical_ip=\"%s\"", egressPod.Status.PodIP), fmt.Sprintf("external_ids:name=%s", eIP.Name), node2.Name),
+
+
+					GINKGO_FOCUS='should re-assign EgressIPs and perform proper OVN transactions when pod is created after node egress label switch' \
+					PKGS="github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn" make check
+				*/
+				natUUIDs := []string{"foo",}
+
+
+
+
 				expectedDatabaseState := []libovsdbtest.TestData{
 					&nbdb.LogicalRouterPolicy{
 						Priority: types.DefaultNoRereoutePriority,
@@ -326,6 +346,7 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 						Name:     ovntypes.OVNClusterRouter,
 						UUID:     ovntypes.OVNClusterRouter + "-UUID",
 						Policies: []string{"reroute-UUID", "default-no-reroute-UUID"},
+						Nat:          natUUIDs,     // !!!!! there should be a N?AT here, right?!?!?!  ^^^^
 					},
 					&nbdb.LogicalRouterPort{
 						UUID:     ovntypes.GWRouterToJoinSwitchPrefix + ovntypes.GWRouterPrefix + node2.Name + "-UUID",
