@@ -135,8 +135,8 @@ func FindRoutersUsingNat(nbClient libovsdbclient.Client, nats []nbdb.NAT) ([]nbd
 		natUUIDs.Insert(nat.UUID)
 	}
 
-	// At this point, we have a list of NATs that should be removed. In order to
-	// to that, iterate through the routers and identify which ones have these nat(s).
+	// At this point, we have a set of NAT UUIDs that we care about.
+	// Iterate through the routers and identify which ones have these nat(s).
 	routers := []nbdb.LogicalRouter{}
 	err := nbClient.WhereCache(func(item *nbdb.LogicalRouter) bool {
 		for _, rtrNatUUID := range item.Nat {
