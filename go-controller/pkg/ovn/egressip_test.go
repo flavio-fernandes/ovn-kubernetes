@@ -246,9 +246,22 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 								Name:     ovntypes.GWRouterToJoinSwitchPrefix + ovntypes.GWRouterPrefix + node2.Name,
 								Networks: []string{nodeLogicalRouterIfAddrV4},
 							},
+							&nbdb.LogicalRouterPort{
+								UUID:     ovntypes.GWRouterToJoinSwitchPrefix + ovntypes.GWRouterPrefix + node1.Name + "-UUID",
+								Name:     ovntypes.GWRouterToJoinSwitchPrefix + ovntypes.GWRouterPrefix + node1.Name,
+								Networks: []string{nodeLogicalRouterIfAddrV4},
+							},
 							&nbdb.LogicalRouter{
 								Name: ovntypes.OVNClusterRouter,
 								UUID: ovntypes.OVNClusterRouter + "-UUID",
+							},
+							&nbdb.LogicalRouter{
+								Name: ovntypes.GWRouterPrefix + node1.Name,
+								UUID: ovntypes.GWRouterPrefix + node1.Name + "-UUID",
+							},
+							&nbdb.LogicalRouter{
+								Name: ovntypes.GWRouterPrefix + node2.Name,
+								UUID: ovntypes.GWRouterPrefix + node2.Name + "-UUID",
 							},
 						},
 					},
@@ -281,6 +294,7 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				gomega.Expect(statuses[0].Node).To(gomega.Equal(node1.Name))
 				gomega.Expect(statuses[0].EgressIP).To(gomega.Equal(egressIP))
 
+
 				node1.Labels = map[string]string{}
 				node2.Labels = map[string]string{
 					"k8s.ovn.org/egress-assignable": "",
@@ -306,25 +320,7 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 				_, err = fakeOvn.fakeClient.KubeClient.CoreV1().Pods(egressPod.Namespace).Create(context.TODO(), &egressPod, metav1.CreateOptions{})
 
 
-
-
-
-				/*
-				   Since I removed this [1], I would expect that the LogicalRouter below would have the NAT. Yet, it does not!
-				   Is it a bug I introduced?!? Or is the fake call never really happening?
-				   [1]:
-				    https://github.com/ovn-org/ovn-kubernetes/pull/2421/files#r717637423
-				    fmt.Sprintf("ovn-nbctl --timeout=15 --id=@nat create nat type=snat %s %s %s %s -- add logical_router GR_%s nat @nat", fmt.Sprintf("logical_port=k8s-%s", node2.Name), fmt.Sprintf("external_ip=\"%s\"", egressIP), fmt.Sprintf("logical_ip=\"%s\"", egressPod.Status.PodIP), fmt.Sprintf("external_ids:name=%s", eIP.Name), node2.Name),
-
-
-					GINKGO_FOCUS='should re-assign EgressIPs and perform proper OVN transactions when pod is created after node egress label switch' \
-					PKGS="github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn" make check
-				*/
-				natUUIDs := []string{"foo",}
-
-
-
-
+				tmp := "k8s-node2"
 				expectedDatabaseState := []libovsdbtest.TestData{
 					&nbdb.LogicalRouterPolicy{
 						Priority: types.DefaultNoRereoutePriority,
@@ -342,15 +338,41 @@ var _ = ginkgo.Describe("OVN master EgressIP Operations", func() {
 						},
 						UUID: "reroute-UUID",
 					},
+				 	&nbdb.NAT{
+						UUID: "egressip-nat-UUID",
+						LogicalIP: podV4IP,
+						ExternalIP: egressIP,
+						ExternalIDs: map[string]string{
+							"name": egressIPName,
+						},
+						Type: nbdb.NATTypeSNAT,
+						LogicalPort: &tmp,
+						Options: map[string]string{
+							"stateless": "false",
+						},
+					},
+					&nbdb.LogicalRouter{
+						Name: ovntypes.GWRouterPrefix + node1.Name,
+						UUID: ovntypes.GWRouterPrefix + node1.Name + "-UUID",
+					},
+					&nbdb.LogicalRouter{
+						Name: ovntypes.GWRouterPrefix + node2.Name,
+						UUID: ovntypes.GWRouterPrefix + node2.Name + "-UUID",
+						Nat: []string{"egressip-nat-UUID"},
+					},
 					&nbdb.LogicalRouter{
 						Name:     ovntypes.OVNClusterRouter,
 						UUID:     ovntypes.OVNClusterRouter + "-UUID",
 						Policies: []string{"reroute-UUID", "default-no-reroute-UUID"},
-						Nat:          natUUIDs,     // !!!!! there should be a N?AT here, right?!?!?!  ^^^^
 					},
 					&nbdb.LogicalRouterPort{
 						UUID:     ovntypes.GWRouterToJoinSwitchPrefix + ovntypes.GWRouterPrefix + node2.Name + "-UUID",
 						Name:     ovntypes.GWRouterToJoinSwitchPrefix + ovntypes.GWRouterPrefix + node2.Name,
+						Networks: []string{nodeLogicalRouterIfAddrV4},
+					},
+					&nbdb.LogicalRouterPort{
+						UUID:     ovntypes.GWRouterToJoinSwitchPrefix + ovntypes.GWRouterPrefix + node1.Name + "-UUID",
+						Name:     ovntypes.GWRouterToJoinSwitchPrefix + ovntypes.GWRouterPrefix + node1.Name,
 						Networks: []string{nodeLogicalRouterIfAddrV4},
 					},
 				}
