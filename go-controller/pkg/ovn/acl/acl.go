@@ -1,10 +1,9 @@
 package acl
 
 import (
-	"fmt"
 	"strings"
 
-	libovsdbclient "github.com/ovn-org/libovsdb/client"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/nbdb"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/libovsdbops"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/types"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
@@ -38,7 +37,17 @@ func PurgeRejectRules(nbClient libovsdbclient.Client) error {
 	}
 
 	for _, acl := range acls {
-		data, stderr, err := util.RunOVNNbctl("--format=csv", "--data=bare", "--no-headings", "--columns=_uuid", "find", "logical_switch", fmt.Sprintf("acls{>=}%s", acl.UUID))
+
+		switchesWithACL := func(item *nbdb.LogicalSwitch) bool {
+			for _, itemAcl := range item.ACLs {
+				if itemAcl == acl.UUID {
+					return true
+				}
+			}
+			return false
+		}
+
+		ls, err := libovsdbops.FindSwitch(modelClient.GetClient(), switchesWithACL)
 		if err != nil {
 			return errors.Wrapf(err, "Error while querying ACLs uuid:%s with reject action: %s", acl.UUID, stderr)
 		}
