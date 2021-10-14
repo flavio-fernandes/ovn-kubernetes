@@ -1,6 +1,6 @@
 module github.com/ovn-org/ovn-kubernetes/go-controller
 
-go 1.13
+go 1.16
 
 require (
 	github.com/Mellanox/sriovnet v1.0.3-0.20210630121212-0453bd4b7fbc
@@ -71,4 +71,5 @@ replace (
 	k8s.io/metrics => k8s.io/metrics v0.22.0
 	k8s.io/mount-utils => k8s.io/mount-utils v0.22.0
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.22.0
+	github.com/ovn-org/libovsdb => github.com/astoycos/libovsdb v0.6.1-0.20211014033450-c39d7d23dd07
 )
