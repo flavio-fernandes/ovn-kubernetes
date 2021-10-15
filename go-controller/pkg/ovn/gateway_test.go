@@ -164,6 +164,35 @@ func generateGatewayInitExpectedNB(testData []libovsdb.TestData, expectedOVNClus
 		Nat:          natUUIDs,
 	})
 
+
+
+
+
+	// chassisName := l3GatewayConfig.ChassisID
+	// testData = append(testData, &nbdb.GatewayChassis{
+	// 	UUID: chassisName + "-UUID",
+	// 	ChassisName: chassisName,
+	// 	Name: gwRouterPort + "-" + chassisName,
+	// 	Priority: 1,
+	// })
+	// gwNetworks := []string{}
+	// for _, ip := range l3GatewayConfig.IPAddresses {
+	// 	gwIfAddr := util.GetNodeGatewayIfAddr(ip)
+	// 	gwNetworks = append(gwNetworks, gwIfAddr.String())
+	// }
+	// testData = append(testData, &nbdb.LogicalRouterPort{
+	// 	UUID: gwRouterPort + "-UUID",
+	// 	Name: gwRouterPort,
+	// 	MAC:  l3GatewayConfig.MACAddress.String(),
+	// 	Networks: gwNetworks,
+	// 	GatewayChassis: []string{chassisName + "-UUID"},
+	// })
+
+	
+
+
+
+
 	testData = append(testData, expectedOVNClusterRouter)
 	testData = append(testData, expectedNodeSwitch)
 

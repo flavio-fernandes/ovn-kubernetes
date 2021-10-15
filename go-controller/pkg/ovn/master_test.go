@@ -242,7 +242,7 @@ func addNodeportLBs(fexec *ovntest.FakeExec, nodeName, tcpLBUUID, udpLBUUID, sct
 }
 */
 
-func addNodeLogicalFlows(testData []libovsdb.TestData, expectedOVNClusterRouter *nbdb.LogicalRouter, expectedNodeSwitch *nbdb.LogicalSwitch, expectedClusterRouterPortGroup, expectedClusterPortGroup *nbdb.PortGroup, fexec *ovntest.FakeExec, node *tNode, clusterCIDR string, enableIPv6 bool) []libovsdb.TestData {
+func addNodeLogicalFlows(testData []libovsdb.TestData, expectedOVNClusterRouter *nbdb.LogicalRouter, expectedNodeSwitch *nbdb.LogicalSwitch, expectedClusterRouterPortGroup, expectedClusterPortGroup *nbdb.PortGroup, fexec *ovntest.FakeExec, node *tNode, clusterCIDR string, enableIPv6 bool, isSharedGw bool) []libovsdb.TestData {
 	fexec.AddFakeCmdsNoOutputNoError([]string{
 		"ovn-nbctl --timeout=15 --data=bare --no-heading --format=csv --columns=name,other-config find logical_switch",
 	})
@@ -251,12 +251,24 @@ func addNodeLogicalFlows(testData []libovsdb.TestData, expectedOVNClusterRouter 
 		"ovn-nbctl --timeout=15 --may-exist ls-add " + node.Name + " -- set logical_switch " + node.Name + " other-config:subnet=" + node.NodeSubnet + " other-config:exclude_ips=" + node.NodeMgmtPortIP,
 	})
 
-	testData = append(testData, &nbdb.LogicalRouterPort{
-		Name:     types.RouterToSwitchPrefix + node.Name,
+	lrpName := types.RouterToSwitchPrefix + node.Name
+	lrp := nbdb.LogicalRouterPort{
+		Name:     lrpName,
 		UUID:     types.RouterToSwitchPrefix + node.Name + "-UUID",
 		MAC:      node.NodeLRPMAC,
 		Networks: []string{node.NodeGWIP},
-	})
+	}
+	if isSharedGw {
+		chassisName := node.SystemID
+		testData = append(testData, &nbdb.GatewayChassis{
+			UUID: chassisName + "-UUID",
+			ChassisName: chassisName,
+			Name: lrpName + "-" + chassisName,
+			Priority: 1,
+		})
+		lrp.GatewayChassis = []string{chassisName + "-UUID"}
+	}
+	testData = append(testData, &lrp)
 
 	expectedOVNClusterRouter.Ports = append(expectedOVNClusterRouter.Ports, types.RouterToSwitchPrefix+node.Name+"-UUID")
 
@@ -1173,7 +1185,8 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			expectedDatabaseState := []libovsdb.TestData{}
-			expectedDatabaseState = addNodeLogicalFlows(expectedDatabaseState, expectedOVNClusterRouter, expectedNodeSwitch, expectedClusterRouterPortGroup, expectedClusterPortGroup, fexec, &node1, clusterCIDR, config.IPv6Mode)
+			isSharedGw := true
+			expectedDatabaseState = addNodeLogicalFlows(expectedDatabaseState, expectedOVNClusterRouter, expectedNodeSwitch, expectedClusterRouterPortGroup, expectedClusterPortGroup, fexec, &node1, clusterCIDR, config.IPv6Mode, isSharedGw)
 
 			clusterController := NewOvnController(fakeClient, f, stopChan, addressset.NewFakeAddressSetFactory(),
 				ovntest.NewMockOVNClient(goovn.DBNB), ovntest.NewMockOVNClient(goovn.DBSB),
@@ -1211,6 +1224,18 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 				IP:   dLRPIP,
 				Mask: dLRPNetwork.Mask,
 			}
+
+
+			// lrpName := types.RouterToSwitchPrefix + node1.Name
+			// chassisName := l3GatewayConfig.ChassisID
+			// expectedDatabaseState = append(expectedDatabaseState, &nbdb.GatewayChassis{
+			// 	UUID: chassisName + "-UUID",
+			// 	ChassisName: chassisName,
+			// 	Name: lrpName + "-" + chassisName,
+			// 	Priority: 1,
+			// })
+		
+
 
 			skipSnat := false
 			expectedDatabaseState = generateGatewayInitExpectedNB(expectedDatabaseState, expectedOVNClusterRouter, expectedNodeSwitch, node1.Name, clusterSubnets, []*net.IPNet{subnet}, l3Config, []*net.IPNet{joinLRPIPs}, []*net.IPNet{dLRPIPs}, skipSnat)
