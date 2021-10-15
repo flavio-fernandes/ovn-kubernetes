@@ -1225,18 +1225,6 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 				Mask: dLRPNetwork.Mask,
 			}
 
-
-			// lrpName := types.RouterToSwitchPrefix + node1.Name
-			// chassisName := l3GatewayConfig.ChassisID
-			// expectedDatabaseState = append(expectedDatabaseState, &nbdb.GatewayChassis{
-			// 	UUID: chassisName + "-UUID",
-			// 	ChassisName: chassisName,
-			// 	Name: lrpName + "-" + chassisName,
-			// 	Priority: 1,
-			// })
-		
-
-
 			skipSnat := false
 			expectedDatabaseState = generateGatewayInitExpectedNB(expectedDatabaseState, expectedOVNClusterRouter, expectedNodeSwitch, node1.Name, clusterSubnets, []*net.IPNet{subnet}, l3Config, []*net.IPNet{joinLRPIPs}, []*net.IPNet{dLRPIPs}, skipSnat)
 			gomega.Eventually(libovsdbOvnNBClient).Should(libovsdbtest.HaveData(expectedDatabaseState))
