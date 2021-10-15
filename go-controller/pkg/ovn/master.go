@@ -747,27 +747,122 @@ func (oc *Controller) syncNodeClusterRouterPort(node *kapi.Node, hostSubnets []*
 		}
 	}
 
+	// TODO(flaviof): delete this!!
+
+	// lrpName := types.RouterToSwitchPrefix + node.Name
+	// lrpArgs := []string{
+	// 	"--if-exists", "lrp-del", lrpName,
+	// 	"--", "lrp-add", types.OVNClusterRouter, lrpName, nodeLRPMAC.String(),
+	// }
+	// for _, hostSubnet := range hostSubnets {
+	// 	gwIfAddr := util.GetNodeGatewayIfAddr(hostSubnet)
+	// 	lrpArgs = append(lrpArgs, gwIfAddr.String())
+	// }
+	// if config.Gateway.Mode != config.GatewayModeLocal {
+	// 	// "local" mode requires NAT on the cluster router, which is not yet supported yet when
+	// 	// multiple DGPs are on the same router, so we can't set the gateway-chassis here.
+	// 	lrpArgs = append(lrpArgs, "--", "lrp-set-gateway-chassis", lrpName, chassisID, "1")
+	// }
+	// _, stderr, err := util.RunOVNNbctl(lrpArgs...)
+	// if err != nil {
+	// 	klog.Errorf("Failed to add logical port to router, stderr: %q, error: %v", stderr, err)
+	// 	return err
+	// }
+
 	lrpName := types.RouterToSwitchPrefix + node.Name
-	lrpArgs := []string{
-		"--if-exists", "lrp-del", lrpName,
-		"--", "lrp-add", types.OVNClusterRouter, lrpName, nodeLRPMAC.String(),
-	}
+	lrpNetworks := []string{}
 	for _, hostSubnet := range hostSubnets {
 		gwIfAddr := util.GetNodeGatewayIfAddr(hostSubnet)
-		lrpArgs = append(lrpArgs, gwIfAddr.String())
+		lrpNetworks = append(lrpNetworks, gwIfAddr.String())
 	}
-	if config.Gateway.Mode != config.GatewayModeLocal {
-		// "local" mode requires NAT on the cluster router, which is not yet supported yet when
-		// multiple DGPs are on the same router, so we can't set the gateway-chassis here.
-		lrpArgs = append(lrpArgs, "--", "lrp-set-gateway-chassis", lrpName, chassisID, "1")
+	logicalRouterPort := nbdb.LogicalRouterPort{
+		Name:     lrpName,
+		MAC:      nodeLRPMAC.String(),
+		Networks: lrpNetworks,
+	}
+	logicalRouter := nbdb.LogicalRouter{}
+	opModels := []libovsdbops.OperationModel{
+		{
+			Model: &logicalRouterPort,
+			ModelPredicate: func(lrp *nbdb.LogicalRouterPort) bool {
+				return lrp.Name == lrpName
+			},
+			OnModelUpdates: []interface{}{
+				&logicalRouterPort.Name,
+				&logicalRouterPort.MAC,
+				&logicalRouterPort.Networks,
+			},
+			DoAfter: func() {
+				if logicalRouterPort.UUID != "" {
+					logicalRouter.Ports = []string{logicalRouterPort.UUID}
+				}
+			},
+		},
+		{
+			Model:          &logicalRouter,
+			ModelPredicate: func(lr *nbdb.LogicalRouter) bool { return lr.Name == types.OVNClusterRouter },
+			OnModelMutations: []interface{}{
+				&logicalRouter.Ports,
+			},
+			ErrNotFound: true,
+		},
 	}
 
-	_, stderr, err := util.RunOVNNbctl(lrpArgs...)
-	if err != nil {
-		klog.Errorf("Failed to add logical port to router, stderr: %q, error: %v", stderr, err)
+	// FIXME(flaviof): should use ops to potentially combine gateway chassis creation below
+	// if created, ops, err := oc.modelClient.CreateOrUpdateOps(opModels...); err != nil {
+	if _, err := oc.modelClient.CreateOrUpdate(opModels...); err != nil {
+		klog.Errorf("Failed to add logical router port %s to router %s, error: %v", lrpName, types.OVNClusterRouter, err)
 		return err
 	}
 
+	if config.Gateway.Mode != config.GatewayModeLocal {
+		// "local" mode requires NAT on the cluster router, which is not yet supported yet when
+		// multiple DGPs are on the same router, so we can't set the gateway-chassis here.
+		// lrpArgs = append(lrpArgs, "--", "lrp-set-gateway-chassis", lrpName, chassisID, "1")
+
+		gatewayChassisName := lrpName + "-" + chassisID
+		gatewayChassis := nbdb.GatewayChassis{
+			Name:        gatewayChassisName,
+			ChassisName: chassisID,
+			Priority:    1,
+		}
+
+		opModels := []libovsdbops.OperationModel{
+			{
+				Model: &gatewayChassis,
+				ModelPredicate: func(gwc *nbdb.GatewayChassis) bool {
+					return gwc.Name == gatewayChassisName
+				},
+				OnModelUpdates: []interface{}{
+					&gatewayChassis.Name,
+					&gatewayChassis.ChassisName,
+					&gatewayChassis.Priority,
+				},
+				DoAfter: func() {
+					if gatewayChassis.UUID != "" {
+						logicalRouterPort.GatewayChassis = []string{gatewayChassis.UUID}
+					}
+				},
+			},
+			{
+				Model:          &logicalRouterPort,
+				ModelPredicate: func(lrp *nbdb.LogicalRouterPort) bool { return lrp.Name == lrpName },
+				OnModelMutations: []interface{}{
+					&logicalRouterPort.GatewayChassis,
+				},
+				ErrNotFound: true,
+			},
+		}
+
+		// FIXME(flaviof): should use ops to potentially combine lrp creation above into a single transaction
+		// if created, ops, err := oc.modelClient.CreateOrUpdateOps(opModels...); err != nil {
+		if _, err := oc.modelClient.CreateOrUpdate(opModels...); err != nil {
+			klog.Errorf("Failed to add gateway chassis %s to logical router port %s, stderr: %q, error: %v", chassisID, lrpName, err)
+			return err
+		}
+	}
+
+	// return libovsdbops.TransactAndCheckAndSetUUIDs(oc.nbClient, created, ops)
 	return nil
 }
 
