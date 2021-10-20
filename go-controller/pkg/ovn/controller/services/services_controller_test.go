@@ -8,7 +8,6 @@ import (
 	"github.com/onsi/gomega"
 	globalconfig "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/nbdb"
-	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/libovsdbops"
 	ovnlb "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/loadbalancer"
 	libovsdbtest "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/testing/libovsdb"
 
@@ -40,13 +39,12 @@ func newControllerWithDBSetup(dbSetup libovsdbtest.TestSetup) (*serviceControlle
 	stopChan := make(chan struct{})
 	client := fake.NewSimpleClientset()
 	nbClient, err := libovsdbtest.NewNBTestHarness(dbSetup, stopChan)
-	modelClient := libovsdbops.NewModelClient(nbClient)
 	if err != nil {
 		return nil, err
 	}
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
 	controller := NewController(client,
-		modelClient,
+		nbClient,
 		informerFactory.Core().V1().Services(),
 		informerFactory.Discovery().V1beta1().EndpointSlices(),
 		informerFactory.Core().V1().Nodes(),
@@ -630,7 +628,7 @@ func TestSyncServices(t *testing.T) {
 				t.Errorf("syncServices error: %v", err)
 			}
 
-			g.Eventually(controller.modelClient.GetClient()).Should(libovsdbtest.HaveData(tt.expectedDb))
+			g.Eventually(controller.nbClient).Should(libovsdbtest.HaveData(tt.expectedDb))
 		})
 	}
 }

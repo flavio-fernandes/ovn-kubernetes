@@ -6,9 +6,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	libovsdbclient "github.com/ovn-org/libovsdb/client"
 	globalconfig "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/acl"
-	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/libovsdbops"
 	ovnlb "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/loadbalancer"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
 
@@ -44,15 +44,15 @@ type repair struct {
 	// Really a boolean, but an int32 for atomicity purposes
 	semLegacyLBsDeleted uint32
 
-	modelClient libovsdbops.ModelClient
+	nbClient libovsdbclient.Client
 }
 
 // NewRepair creates a controller that periodically ensures that there is no stale data in OVN
-func newRepair(serviceLister corelisters.ServiceLister, modelClient libovsdbops.ModelClient) *repair {
+func newRepair(serviceLister corelisters.ServiceLister, nbClient libovsdbclient.Client) *repair {
 	return &repair{
 		serviceLister:    serviceLister,
 		unsyncedServices: sets.String{},
-		modelClient:      modelClient,
+		nbClient:         nbClient,
 	}
 }
 
@@ -83,7 +83,7 @@ func (r *repair) runBeforeSync() {
 	}
 
 	// Find all load-balancers associated with Services
-	lbCache, err := ovnlb.GetLBCache(r.modelClient.GetClient())
+	lbCache, err := ovnlb.GetLBCache(r.nbClient)
 	if err != nil {
 		klog.Errorf("Failed to get load_balancer cache: %v", err)
 	}
@@ -108,14 +108,14 @@ func (r *repair) runBeforeSync() {
 	}
 
 	// Delete those stale load balancers
-	if err := ovnlb.DeleteLBs(r.modelClient.GetClient(), staleLBs); err != nil {
+	if err := ovnlb.DeleteLBs(r.nbClient, staleLBs); err != nil {
 		klog.Errorf("Failed to delete stale LBs: %v", err)
 	}
 	klog.V(2).Infof("Deleted %d stale service LBs", len(staleLBs))
 
 	// Remove existing reject rules. They are not used anymore
 	// given the introduction of idling loadbalancers
-	err = acl.PurgeRejectRules(r.modelClient)
+	err = acl.PurgeRejectRules(r.nbClient)
 	if err != nil {
 		klog.Errorf("Failed to purge existing reject rules: %v", err)
 	}
@@ -153,7 +153,7 @@ func (r *repair) runAfterSync() {
 
 func (r *repair) deleteLegacyLBs() error {
 	// Find all load-balancers associated with Services
-	legacyLBs, err := findLegacyLBs(r.modelClient.GetClient())
+	legacyLBs, err := findLegacyLBs(r.nbClient)
 	if err != nil {
 		klog.Errorf("Failed to list existing load balancers: %v", err)
 		return err

@@ -1,10 +1,7 @@
 package types
 
-import "time"
-
 const (
-	K8sPrefix           = "k8s-"
-	HybridOverlayPrefix = "int-"
+	K8sPrefix = "k8s-"
 	// K8sMgmtIntfName name to be used as an OVS internal port on the node
 	K8sMgmtIntfName = "ovn-k8s-mp0"
 
@@ -60,8 +57,8 @@ const (
 	DefaultDenyPriority = 1000
 
 	// priority of logical router policies on the OVNClusterRouter
-	EgressFirewallStartPriority           = 10000
-	MinimumReservedEgressFirewallPriority = 2000
+	EgressFirewallStartPriority           = "10000"
+	MinimumReservedEgressFirewallPriority = "2000"
 	MGMTPortPolicyPriority                = "1005"
 	NodeSubnetPolicyPriority              = "1004"
 	InterNodePolicyPriority               = "1003"
@@ -122,6 +119,4 @@ const (
 
 	ClusterPortGroupName    = "clusterPortGroup"
 	ClusterRtrPortGroupName = "clusterRtrPortGroup"
-
-	OVSDBTimeout = 10 * time.Second
 )
