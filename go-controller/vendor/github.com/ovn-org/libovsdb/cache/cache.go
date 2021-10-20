@@ -611,6 +611,9 @@ func (t *TableCache) Populate2(tableUpdates ovsdb.TableUpdates2) {
 				// If everything else is nil (including Delete because it's a key with
 				// no value on the wire), then process a delete
 				m := tCache.Row(uuid)
+				if m == nil {
+					panic(fmt.Errorf("row with uuid %s does not exist", uuid))
+				}
 				if err := tCache.Delete(uuid); err != nil {
 					panic(err)
 				}

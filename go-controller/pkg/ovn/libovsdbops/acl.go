@@ -19,10 +19,10 @@ func getACLName(acl *nbdb.ACL) string {
 	return ""
 }
 
-// isEquivalentACL if it has same uuid, or if it has same name
+// IsEquivalentACL if it has same uuid, or if it has same name
 // and external ids, or if it has same priority, direction, match
 // and action.
-func isEquivalentACL(existing *nbdb.ACL, searched *nbdb.ACL) bool {
+func IsEquivalentACL(existing *nbdb.ACL, searched *nbdb.ACL) bool {
 	if searched.UUID != "" && existing.UUID == searched.UUID {
 		return true
 	}
@@ -34,7 +34,6 @@ func isEquivalentACL(existing *nbdb.ACL, searched *nbdb.ACL) bool {
 	if eName != "" && eName == sName && reflect.DeepEqual(existing.ExternalIDs, searched.ExternalIDs) {
 		return true
 	}
-
 	return existing.Priority == searched.Priority &&
 		existing.Direction == searched.Direction &&
 		existing.Match == searched.Match &&
@@ -49,7 +48,7 @@ func findACL(nbClient libovsdbclient.Client, acl *nbdb.ACL) error {
 
 	acls := []nbdb.ACL{}
 	err := nbClient.WhereCache(func(item *nbdb.ACL) bool {
-		return isEquivalentACL(item, acl)
+		return IsEquivalentACL(item, acl)
 	}).List(&acls)
 
 	if err != nil {
@@ -76,15 +75,29 @@ func ensureACLUUID(acl *nbdb.ACL) {
 
 func BuildACL(name string, direction nbdb.ACLDirection, priority int, match string, action nbdb.ACLAction, meter string, severity nbdb.ACLSeverity, log bool, externalIds map[string]string) *nbdb.ACL {
 	name = fmt.Sprintf("%.63s", name)
+
+	var realName *string
+	var realMeter *string
+	var realSeverity *string
+	if len(name) != 0 {
+		realName = &name
+	}
+	if len(meter) != 0 {
+		realMeter = &match
+	}
+	if len(severity) != 0 {
+		realSeverity = &severity
+	}
+
 	return &nbdb.ACL{
-		Name:        &name,
+		Name:        realName,
 		Direction:   direction,
 		Match:       match,
 		Action:      action,
 		Priority:    priority,
-		Severity:    &severity,
+		Severity:    realSeverity,
 		Log:         log,
-		Meter:       &meter,
+		Meter:       realMeter,
 		ExternalIDs: externalIds,
 	}
 }
@@ -186,6 +199,21 @@ func FindRejectACLs(nbClient libovsdbclient.Client) ([]*nbdb.ACL, error) {
 	err := nbClient.WhereCache(func(acl *nbdb.ACL) bool {
 		return acl.Action == nbdb.ACLActionReject
 	}).List(&acls)
+	if err != nil {
+		return nil, err
+	}
+
+	aclPtrs := []*nbdb.ACL{}
+	for i := range acls {
+		aclPtrs = append(aclPtrs, &acls[i])
+	}
+
+	return aclPtrs, nil
+}
+
+func FindACLs(nbClient libovsdbclient.Client, lookupFunction func(item *nbdb.ACL) bool) ([]*nbdb.ACL, error) {
+	acls := []nbdb.ACL{}
+	err := nbClient.WhereCache(lookupFunction).List(&acls)
 	if err != nil {
 		return nil, err
 	}

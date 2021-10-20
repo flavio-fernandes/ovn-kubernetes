@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	libovsdbclient "github.com/ovn-org/libovsdb/client"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/metrics"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/libovsdbops"
 	ovnlb "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/loadbalancer"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
 	"golang.org/x/time/rate"
@@ -47,7 +47,7 @@ const (
 
 // NewController returns a new *Controller.
 func NewController(client clientset.Interface,
-	nbClient libovsdbclient.Client,
+	modelClient libovsdbops.ModelClient,
 	serviceInformer coreinformers.ServiceInformer,
 	endpointSliceInformer discoveryinformers.EndpointSliceInformer,
 	nodeInformer coreinformers.NodeInformer,
@@ -60,7 +60,7 @@ func NewController(client clientset.Interface,
 
 	c := &Controller{
 		client:           client,
-		nbClient:         nbClient,
+		modelClient:      modelClient,
 		queue:            workqueue.NewNamedRateLimitingQueue(newRatelimiter(100), controllerName),
 		workerLoopPeriod: time.Second,
 		alreadyApplied:   map[string][]ovnlb.LB{},
@@ -91,7 +91,7 @@ func NewController(client clientset.Interface,
 	c.eventRecorder = recorder
 
 	// repair controller
-	c.repair = newRepair(serviceInformer.Lister(), nbClient)
+	c.repair = newRepair(serviceInformer.Lister(), modelClient)
 
 	// load balancers need to be applied to nodes, so
 	// we need to watch Node objects for changes.
@@ -107,8 +107,7 @@ type Controller struct {
 	client clientset.Interface
 
 	// libovsdb northbound client interface
-	nbClient libovsdbclient.Client
-
+	modelClient      libovsdbops.ModelClient
 	eventBroadcaster record.EventBroadcaster
 	eventRecorder    record.EventRecorder
 
@@ -264,7 +263,7 @@ func (c *Controller) syncService(key string) error {
 			},
 		}
 
-		if err := ovnlb.EnsureLBs(c.nbClient, util.ExternalIDsForObject(service), nil); err != nil {
+		if err := ovnlb.EnsureLBs(c.modelClient.GetClient(), util.ExternalIDsForObject(service), nil); err != nil {
 			return fmt.Errorf("failed to delete load balancers for service %s/%s: %w",
 				namespace, name, err)
 		}
@@ -314,7 +313,7 @@ func (c *Controller) syncService(key string) error {
 		//
 		// Note: this may fail if a node was deleted between listing nodes and applying.
 		// If so, this will fail and we will resync.
-		if err := ovnlb.EnsureLBs(c.nbClient, util.ExternalIDsForObject(service), lbs); err != nil {
+		if err := ovnlb.EnsureLBs(c.modelClient.GetClient(), util.ExternalIDsForObject(service), lbs); err != nil {
 			return fmt.Errorf("failed to ensure service %s load balancers: %w", key, err)
 		}
 
@@ -324,7 +323,7 @@ func (c *Controller) syncService(key string) error {
 	}
 
 	if !c.repair.legacyLBsDeleted() {
-		if err := deleteServiceFromLegacyLBs(c.nbClient, service); err != nil {
+		if err := deleteServiceFromLegacyLBs(c.modelClient.GetClient(), service); err != nil {
 			klog.Warningf("Failed to delete legacy vips for service %s: %v", key)
 			// Continue anyways, because once all services are synced, we'll delete
 			// the legacy load balancers
