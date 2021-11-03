@@ -259,7 +259,7 @@ func createServiceForPodsWithLabel(f *framework.Framework, namespace string, ser
 		},
 		Spec: v1.ServiceSpec{
 			Ports: []v1.ServicePort{
-				v1.ServicePort{
+				{
 					Protocol:   v1.ProtocolTCP,
 					TargetPort: intstr.Parse(targetPort),
 					Port:       servicePort,
@@ -709,6 +709,74 @@ var _ = ginkgo.Describe("test e2e pod connectivity to host addresses", func() {
 		// Spin up another pod that attempts to reach the previously started pod on separate nodes
 		framework.ExpectNoError(
 			checkConnectivityPingToHost(f, ovnWorkerNode, "e2e-src-ping-pod", targetIP, ipv4PingCommand, 30, false))
+	})
+})
+
+// Test node annotation and recovery of netlink channel
+var _ = ginkgo.Describe("test node annotations from netlink updates", func() {
+	const (
+		ovnWorkerNode string = "ovn-worker"
+		svcname       string = "node-e2e-to-host"
+	)
+	var (
+		targetIP     string
+		singleIPMask string
+	)
+
+	f := framework.NewDefaultFramework(svcname)
+
+	ginkgo.BeforeEach(func() {
+		targetIP = "123.123.123.123"
+		singleIPMask = "32"
+		if IsIPv6Cluster(f.ClientSet) {
+			targetIP = "2001:db8:3333:4444:CCCC:DDDD:EEEE:FFFF"
+			singleIPMask = "128"
+		}
+	})
+
+	hasNodeAddress := func(searchAddr string) bool {
+		ovnNodeHostAddresses := "k8s.ovn.org/host-addresses"
+		nodeClient := f.ClientSet.CoreV1().Nodes()
+		node, err := nodeClient.Get(context.Background(), ovnWorkerNode, metav1.GetOptions{})
+		framework.ExpectNotEqual(nil, node)
+		framework.ExpectNoError(err)
+		addrs := []string{}
+		framework.ExpectNoError(func() error {
+			addrsJson, found := node.Annotations[ovnNodeHostAddresses]
+			if !found {
+				return fmt.Errorf("no addresses found in node %s annotations", ovnWorkerNode)
+			}
+			if err := json.Unmarshal([]byte(addrsJson), &addrs); err != nil {
+				return fmt.Errorf("unexpected addresses from node annotation: %s %s", addrsJson, err)
+			}
+			return nil
+		}())
+		for _, addr := range addrs {
+			if addr == searchAddr {
+				return true
+			}
+		}
+		return false
+	}
+
+	ginkgo.It("test node annotation addresses", func() {
+		// Remove address in case there is a left over from previous run
+		runCommand("docker", "exec", ovnWorkerNode, "ip", "a", "del",
+			fmt.Sprintf("%s/%s", targetIP, singleIPMask), "dev", "breth0")
+
+		framework.ExpectEqual(hasNodeAddress(targetIP), false, fmt.Sprintf("target ip %s should not be in node annotation yet", targetIP))
+
+		// Add target IP address to the worker
+		_, err := runCommand("docker", "exec", ovnWorkerNode, "ip", "a", "add",
+			fmt.Sprintf("%s/%s", targetIP, singleIPMask), "dev", "breth0")
+		framework.ExpectNoError(err, "failed to add IP to %s", ovnWorkerNode)
+		framework.ExpectEqual(hasNodeAddress(targetIP), true, fmt.Sprintf("target ip %s should be in node annotation", targetIP))
+
+		_, err = runCommand("docker", "exec", ovnWorkerNode, "ip", "a", "del",
+			fmt.Sprintf("%s/%s", targetIP, singleIPMask), "dev", "breth0")
+		framework.ExpectNoError(err, "failed to remove IP from %s", ovnWorkerNode)
+
+		framework.ExpectEqual(hasNodeAddress(targetIP), false, fmt.Sprintf("target ip %s should not be in node annotation yet", targetIP))
 	})
 })
 
@@ -3025,7 +3093,7 @@ var _ = ginkgo.Describe("e2e IGMP validation", func() {
 	f := framework.NewDefaultFramework(svcname)
 	ginkgo.It("can retrieve multicast IGMP query", func() {
 		// Enable multicast of the test namespace annotation
-		ginkgo.By(fmt.Sprintf("annotating namespace: %s to enable multicast",f.Namespace.Name))
+		ginkgo.By(fmt.Sprintf("annotating namespace: %s to enable multicast", f.Namespace.Name))
 		annotateArgs := []string{
 			"annotate",
 			"namespace",
