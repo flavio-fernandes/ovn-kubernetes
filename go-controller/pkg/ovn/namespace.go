@@ -15,6 +15,7 @@ import (
 	kapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 )
 
@@ -30,27 +31,29 @@ const (
 )
 
 func (oc *Controller) syncNamespaces(namespaces []interface{}) {
-	expectedNs := make(map[string]bool)
-	for _, nsInterface := range namespaces {
-		ns, ok := nsInterface.(*kapi.Namespace)
-		if !ok {
-			klog.Errorf("Spurious object in syncNamespaces: %v", nsInterface)
-			continue
-		}
-		expectedNs[ns.Name] = true
-	}
-
-	err := oc.addressSetFactory.ProcessEachAddressSet(func(addrSetName, namespaceName, nameSuffix string) error {
-		if nameSuffix == "" && !expectedNs[namespaceName] {
-			if err := oc.addressSetFactory.DestroyAddressSetInBackingStore(addrSetName); err != nil {
-				klog.Errorf(err.Error())
-				return err
+	err := wait.PollImmediate(500*time.Millisecond, 60*time.Second, func() (bool, error) {
+		expectedNs := make(map[string]bool)
+		for _, nsInterface := range namespaces {
+			ns, ok := nsInterface.(*kapi.Namespace)
+			if !ok {
+				err := fmt.Errorf("spurious object in syncNamespaces: %v", nsInterface)
+				return true, err
 			}
+			expectedNs[ns.Name] = true
 		}
-		return nil
+		if err := oc.addressSetFactory.ProcessEachAddressSet(func(addrSetName, namespaceName, nameSuffix string) error {
+			if nameSuffix == "" && !expectedNs[namespaceName] {
+				return oc.addressSetFactory.DestroyAddressSetInBackingStore(addrSetName)
+			}
+			return nil
+		}); err != nil {
+			klog.Errorf("Failed (will retry) in syncing namespaces: %v", err)
+			return false, nil
+		}
+		return true, nil
 	})
 	if err != nil {
-		klog.Errorf("Error in syncing namespaces: %v", err)
+		klog.Fatalf("Error in syncing namespaces: %v", err)
 	}
 }
 
