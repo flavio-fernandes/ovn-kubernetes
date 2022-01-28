@@ -30,7 +30,7 @@ const (
 	ipv6AddressSetSuffix = "_v6"
 )
 
-type AddressSetIterFunc func(hashedName, namespace, suffix string)
+type AddressSetIterFunc func(hashedName, namespace, suffix string) error
 type AddressSetDoFunc func(as AddressSet) error
 
 // AddressSetFactory is an interface for managing address set objects
@@ -176,7 +176,7 @@ func (asf *ovnAddressSetFactory) EnsureAddressSet(name string) (AddressSet, erro
 	return &ovnAddressSets{nbClient: asf.nbClient, name: name, ipv4: v4set, ipv6: v6set}, nil
 }
 
-func forEachAddressSet(nbClient libovsdbclient.Client, do func(string)) error {
+func forEachAddressSet(nbClient libovsdbclient.Client, do func(string) error) error {
 	addrSetList := &[]nbdb.AddressSet{}
 	ctx, cancel := context.WithTimeout(context.Background(), types.OVSDBTimeout)
 	defer cancel()
@@ -189,9 +189,23 @@ func forEachAddressSet(nbClient libovsdbclient.Client, do func(string)) error {
 		return fmt.Errorf("error reading address sets: %+v", err)
 	}
 
+	var errors []error
 	for _, addrSet := range *addrSetList {
-		do(addrSet.ExternalIDs["name"])
+		if err := do(addrSet.ExternalIDs["name"]); err != nil {
+			errors = append(errors, err)
+		}
 	}
+
+	if len(errors) == 1 {
+		return errors[0]
+	} else if len(errors) > 1 {
+		var combined []string
+		for _, e := range errors {
+			combined = append(combined, e.Error())
+		}
+		return fmt.Errorf("failed to iterate address sets: %s", strings.Join(combined, ". "))
+	}
+
 	return nil
 }
 
@@ -200,14 +214,14 @@ func forEachAddressSet(nbClient libovsdbclient.Client, do func(string)) error {
 // OVN. (Unhashed address set names are of the form namespaceName[.suffix1.suffix2. .suffixN])
 func (asf *ovnAddressSetFactory) ProcessEachAddressSet(iteratorFn AddressSetIterFunc) error {
 	processedAddressSets := sets.String{}
-	err := forEachAddressSet(asf.nbClient, func(name string) {
+	return forEachAddressSet(asf.nbClient, func(name string) error {
 		// Remove the suffix from the address set name and normalize
 		addrSetName := truncateSuffixFromAddressSet(name)
 		if processedAddressSets.Has(addrSetName) {
 			// We have already processed the address set. In case of dual stack we will have _v4 and _v6
 			// suffixes for address sets. Since we are normalizing these two address sets through this API
 			// we will process only one normalized address set name.
-			return
+			return nil
 		}
 		processedAddressSets.Insert(addrSetName)
 		names := strings.Split(addrSetName, ".")
@@ -216,10 +230,8 @@ func (asf *ovnAddressSetFactory) ProcessEachAddressSet(iteratorFn AddressSetIter
 		if len(names) >= 2 {
 			nameSuffix = names[1]
 		}
-		iteratorFn(addrSetName, addrSetNamespace, nameSuffix)
+		return iteratorFn(addrSetName, addrSetNamespace, nameSuffix)
 	})
-
-	return err
 }
 
 func truncateSuffixFromAddressSet(asName string) string {
