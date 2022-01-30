@@ -5,6 +5,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/types"
 
 	kapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
@@ -97,11 +99,23 @@ func newEgressFirewallRule(rawEgressFirewallRule egressfirewallapi.EgressFirewal
 
 // NOTE: Utilize the fact that we know that all egress firewall related setup must have a priority: types.MinimumReservedEgressFirewallPriority <= priority <= types.EgressFirewallStartPriority
 func (oc *Controller) syncEgressFirewall(egressFirewalls []interface{}) {
+	err := wait.PollImmediate(500*time.Millisecond, 60*time.Second, func() (bool, error) {
+		if err := oc.syncEgressFirewallRetriable(egressFirewalls); err != nil {
+			klog.Errorf("Failed (will retry) in egress firewall: %v", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		klog.Fatalf("Error in syncing egress firewall: %v", err)
+	}
+}
+
+func (oc *Controller) syncEgressFirewallRetriable(egressFirewalls []interface{}) error {
 	// Lookup all ACLs used for egress Firewalls
 	egressFirewallACLs, err := libovsdbops.FindACLsByPriorityRange(oc.nbClient, types.MinimumReservedEgressFirewallPriority, types.EgressFirewallStartPriority)
 	if err != nil {
-		klog.Errorf("Unable to list egress firewall ACLs, cannot cleanup old stale data, err: %v", err)
-		return
+		return fmt.Errorf("unable to list egress firewall ACLs, cannot cleanup old stale data, err: %v", err)
 	}
 
 	if config.Gateway.Mode == config.GatewayModeShared {
@@ -109,8 +123,7 @@ func (oc *Controller) syncEgressFirewall(egressFirewalls []interface{}) {
 		if len(egressFirewallACLs) != 0 {
 			err = libovsdbops.RemoveACLsFromNodeSwitches(oc.nbClient, egressFirewallACLs)
 			if err != nil {
-				klog.Errorf("Failed to remove reject acl from node logical switches: %v", err)
-				return
+				return fmt.Errorf("failed to remove reject acl from node logical switches: %v", err)
 			}
 		}
 	} else if config.Gateway.Mode == config.GatewayModeLocal {
@@ -118,8 +131,7 @@ func (oc *Controller) syncEgressFirewall(egressFirewalls []interface{}) {
 		if len(egressFirewallACLs) != 0 {
 			err = libovsdbops.RemoveACLsFromJoinSwitch(oc.nbClient, egressFirewallACLs)
 			if err != nil {
-				klog.Errorf("Failed to remove reject acl from node logical switches: %v", err)
-				return
+				return fmt.Errorf("failed to remove reject acl from node logical switches: %v", err)
 			}
 		}
 	}
@@ -143,7 +155,7 @@ func (oc *Controller) syncEgressFirewall(egressFirewalls []interface{}) {
 			})
 		}
 		if _, err := oc.modelClient.CreateOrUpdate(opModels...); err != nil {
-			klog.Errorf("Unable to set ACL direction on egress firewall acls, cannot convert old ACL data err: %v", err)
+			return fmt.Errorf("unable to set ACL direction on egress firewall acls, cannot convert old ACL data err: %v", err)
 		}
 	}
 	// In any gateway mode, make sure to delete all LRPs on ovn_cluster_router.
@@ -170,7 +182,7 @@ func (oc *Controller) syncEgressFirewall(egressFirewalls []interface{}) {
 		},
 	}
 	if err := oc.modelClient.Delete(opModels...); err != nil {
-		klog.Errorf("Unable to remove egress firewall policy, cannot cleanup old stale data, err: %v", err)
+		return fmt.Errorf("unable to remove egress firewall policy, cannot cleanup old stale data, err: %v", err)
 	}
 
 	// sync the ovn and k8s egressFirewall states
@@ -189,7 +201,7 @@ func (oc *Controller) syncEgressFirewall(egressFirewalls []interface{}) {
 	// get all the k8s EgressFirewall Objects
 	egressFirewallList, err := oc.kube.GetEgressFirewalls()
 	if err != nil {
-		klog.Errorf("Cannot reconcile the state of egressfirewalls in ovn database and k8s. err: %v", err)
+		return fmt.Errorf("cannot reconcile the state of egressfirewalls in ovn database and k8s. err: %v", err)
 	}
 	// delete entries from the map that exist in k8s and ovn
 	for _, egressFirewall := range egressFirewallList.Items {
@@ -199,10 +211,10 @@ func (oc *Controller) syncEgressFirewall(egressFirewalls []interface{}) {
 	for spuriousEF := range ovnEgressFirewalls {
 		err := oc.deleteEgressFirewallRules(spuriousEF)
 		if err != nil {
-			klog.Errorf("Cannot fully reconcile the state of egressfirewalls ACLs for namespace %s still exist in ovn db: %v", spuriousEF, err)
-			return
+			return fmt.Errorf("cannot fully reconcile the state of egressfirewalls ACLs for namespace %s still exist in ovn db: %v", spuriousEF, err)
 		}
 	}
+	return nil
 }
 
 func (oc *Controller) addEgressFirewall(egressFirewall *egressfirewallapi.EgressFirewall) error {
