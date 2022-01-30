@@ -108,13 +108,24 @@ func hashedPortGroup(s string) string {
 }
 
 func (oc *Controller) syncNetworkPolicies(networkPolicies []interface{}) {
+	err := wait.PollImmediate(500*time.Millisecond, 60*time.Second, func() (bool, error) {
+		if err := oc.syncNetworkPoliciesRetriable(networkPolicies); err != nil {
+			klog.Errorf("Failed (will retry) in syncing network policies: %v", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		klog.Fatalf("Error in syncing network policies: %v", err)
+	}
+}
+
+func (oc *Controller) syncNetworkPoliciesRetriable(networkPolicies []interface{}) error {
 	expectedPolicies := make(map[string]map[string]bool)
 	for _, npInterface := range networkPolicies {
 		policy, ok := npInterface.(*knet.NetworkPolicy)
 		if !ok {
-			klog.Errorf("Spurious object in syncNetworkPolicies: %v",
-				npInterface)
-			continue
+			return fmt.Errorf("spurious object in syncNetworkPolicies: %v", npInterface)
 		}
 
 		if nsMap, ok := expectedPolicies[policy.Namespace]; ok {
@@ -142,15 +153,16 @@ func (oc *Controller) syncNetworkPolicies(networkPolicies []interface{}) {
 		return nil
 	})
 	if err != nil {
-		klog.Errorf("Error in syncing network policies: %v", err)
+		return fmt.Errorf("error in syncing network policies: %v", err)
 	}
 
 	if len(stalePGs) > 0 {
 		err = libovsdbops.DeletePortGroups(oc.nbClient, stalePGs...)
 		if err != nil {
-			klog.Errorf("Error removing stale port groups %v: %v", stalePGs, err)
+			return fmt.Errorf("error removing stale port groups %v: %v", stalePGs, err)
 		}
 	}
+	return nil
 }
 
 func addAllowACLFromNode(nodeName string, mgmtPortIP net.IP, nbClient libovsdbclient.Client) error {
