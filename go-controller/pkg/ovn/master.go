@@ -1365,12 +1365,24 @@ func (oc *Controller) syncNodesPeriodic() {
 // Note that this list will include the 'join' cluster switch, which we
 // do not want to delete.
 func (oc *Controller) syncNodes(nodes []interface{}) {
+	err := utilwait.PollImmediate(500*time.Millisecond, 60*time.Second, func() (bool, error) {
+		if err := oc.syncNodesRetriable(nodes); err != nil {
+			klog.Errorf("Failed (will retry) in syncing nodes: %v", err)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		klog.Fatalf("Error in syncing nodes: %v", err)
+	}
+}
+
+func (oc *Controller) syncNodesRetriable(nodes []interface{}) error {
 	foundNodes := sets.NewString()
 	for _, tmp := range nodes {
 		node, ok := tmp.(*kapi.Node)
 		if !ok {
-			klog.Errorf("Spurious object in syncNodes: %v", tmp)
-			continue
+			return fmt.Errorf("spurious object in syncNodes: %v", tmp)
 		}
 		foundNodes.Insert(node.Name)
 
@@ -1387,6 +1399,7 @@ func (oc *Controller) syncNodes(nodes []interface{}) {
 		// For each existing node, reserve its joinSwitch LRP IPs if they already exist.
 		_, err := oc.joinSwIPManager.EnsureJoinLRPIPs(node.Name)
 		if err != nil {
+			// TODO (flaviof): keep going even if EnsureJoinLRPIPs returned an error. Maybe we should not.
 			klog.Errorf("Failed to get join switch port IP address for node %s: %v", node.Name, err)
 		}
 	}
@@ -1396,8 +1409,7 @@ func (oc *Controller) syncNodes(nodes []interface{}) {
 
 	chassisList, err := libovsdbops.ListChassis(oc.sbClient)
 	if err != nil {
-		klog.Errorf("Failed to get chassis list: error: %v", err)
-		return
+		return fmt.Errorf("failed to get chassis list: error: %v", err)
 	}
 
 	for _, chassis := range chassisList {
@@ -1409,8 +1421,7 @@ func (oc *Controller) syncNodes(nodes []interface{}) {
 
 	nodeSwitches, err := libovsdbops.FindSwitchesWithOtherConfig(oc.nbClient)
 	if err != nil {
-		klog.Errorf("Failed to get node logical switches which have other-config set error: %v", err)
-		return
+		return fmt.Errorf("failed to get node logical switches which have other-config set error: %v", err)
 	}
 
 	for _, nodeSwitch := range nodeSwitches {
@@ -1449,7 +1460,7 @@ func (oc *Controller) syncNodes(nodes []interface{}) {
 	}
 
 	if err := libovsdbops.DeleteNodeChassis(oc.sbClient, staleChassis.List()...); err != nil {
-		klog.Errorf("Failed Deleting chassis %v error: %v", staleChassis.List(), err)
-		return
+		return fmt.Errorf("failed deleting chassis %v error: %v", staleChassis.List(), err)
 	}
+	return nil
 }
