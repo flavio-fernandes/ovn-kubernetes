@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/types"
 	"reflect"
+
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/nbdb"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/types"
 
 	"github.com/ovn-org/libovsdb/client"
 	"github.com/ovn-org/libovsdb/model"
@@ -295,8 +297,8 @@ func (m *ModelClient) create(opModel *OperationModel) ([]ovsdb.Operation, error)
 	// ACL we would have to use external_ids + name for unique match
 	// However external_ids would be a performance hit, and in one case we use
 	// an empty name and external_ids for addAllowACLFromNode
+	timeout := types.OVSDBWaitTimeout
 	if len(opModel.Name) > 0 && o[0].Table != "ACL" {
-		timeout := types.OVSDBWaitTimeout
 		ops = append(ops, ovsdb.Operation{
 			Op:      ovsdb.OperationWait,
 			Timeout: &timeout,
@@ -306,6 +308,32 @@ func (m *ModelClient) create(opModel *OperationModel) ([]ovsdb.Operation, error)
 			Until:   "!=",
 			Rows:    []ovsdb.Row{{"name": opModel.Name}},
 		})
+	} else if o[0].Table == "Logical_Router_Policy" {
+		lrp, ok := opModel.Model.(*nbdb.LogicalRouterPolicy)
+		if !ok {
+			return nil, fmt.Errorf("expected LogicalRouterPolicy model, got: %v", opModel.Model)
+		}
+		condPriority := model.Condition{
+			Field:    &lrp.Priority,
+			Function: ovsdb.ConditionEqual,
+			Value:    lrp.Priority,
+		}
+		condMatch := model.Condition{
+			Field:    &lrp.Match,
+			Function: ovsdb.ConditionEqual,
+			Value:    lrp.Match,
+		}
+		waitOps, err := m.client.WhereAll(lrp, condPriority, condMatch).Wait(
+			ovsdb.WaitConditionNotEqual,
+			&timeout,
+			lrp,
+			&lrp.Priority,
+			&lrp.Match,
+		)
+		if err != nil {
+			return nil, err
+		}
+		ops = append(ops, waitOps...)
 	} else if info, err := m.client.Cache().DatabaseModel().NewModelInfo(opModel.Model); err == nil {
 		if name, err := info.FieldByColumn("name"); err == nil {
 			objName, ok := name.(string)

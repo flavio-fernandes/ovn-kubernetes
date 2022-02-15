@@ -3,12 +3,14 @@ package ovn
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"strconv"
 
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/libovsdbops"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/nbdb"
+	"golang.org/x/sync/errgroup"
 
 	libovsdbtest "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/testing/libovsdb"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/types"
@@ -1946,6 +1948,68 @@ var _ = ginkgo.Describe("OVN Egress Gateway Operations", func() {
 				gomega.Eventually(fakeOvn.nbClient).Should(libovsdbtest.HaveData(finalNB))
 				// check if the address-set was created with the podIP
 				fakeOvn.asf.ExpectAddressSetWithIPs("hybrid-route-pods-node1", []string{"10.128.1.3"})
+				return nil
+			}
+
+			err := app.Run([]string{app.Name})
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		})
+		ginkgo.It("should create a single policy for concurrent addHybridRoutePolicy for the same node", func() {
+			app.Action = func(ctx *cli.Context) error {
+				config.Gateway.Mode = config.GatewayModeLocal
+				config.Logging.Level = 5 // DEBUG
+
+				fakeOvn.startWithDBSetup(
+					libovsdbtest.TestSetup{
+						NBData: []libovsdbtest.TestData{
+							&nbdb.LogicalRouterPort{
+								UUID:     ovntypes.GWRouterToJoinSwitchPrefix + ovntypes.GWRouterPrefix + "node1" + "-UUID",
+								Name:     ovntypes.GWRouterToJoinSwitchPrefix + ovntypes.GWRouterPrefix + "node1",
+								Networks: []string{"100.64.0.4/32"},
+							},
+							&nbdb.LogicalRouter{
+								Name: ovntypes.OVNClusterRouter,
+								UUID: ovntypes.OVNClusterRouter + "-UUID",
+							},
+						},
+					},
+				)
+				intPriority, _ := strconv.Atoi(types.HybridOverlayReroutePriority)
+				finalNB := []libovsdbtest.TestData{
+					&nbdb.LogicalRouterPolicy{
+						UUID:     "2a7a61cb-fb13-4266-a3f0-9ac5c4471123 [u2596996164]",
+						Priority: intPriority,
+						Action:   nbdb.LogicalRouterPolicyActionReroute,
+						Nexthops: []string{"100.64.0.4"},
+						Match:    "inport == \"rtos-node1\" && ip4.src == $a17568862106095406051 && ip4.dst != 10.128.0.0/14",
+					},
+					&nbdb.LogicalRouter{
+						Name:     ovntypes.OVNClusterRouter,
+						UUID:     ovntypes.OVNClusterRouter + "-UUID",
+						Policies: []string{"2a7a61cb-fb13-4266-a3f0-9ac5c4471123 [u2596996164]"},
+					},
+					&nbdb.LogicalRouterPort{
+						UUID:     ovntypes.GWRouterToJoinSwitchPrefix + ovntypes.GWRouterPrefix + "node1" + "-UUID",
+						Name:     ovntypes.GWRouterToJoinSwitchPrefix + ovntypes.GWRouterPrefix + "node1",
+						Networks: []string{"100.64.0.4/32"},
+					},
+				}
+
+				g := new(errgroup.Group)
+				c := make(chan int)
+				for i := 1; i <= 3; i++ {
+					podIndex := i
+					g.Go(func() error {
+						<-c
+						return fakeOvn.controller.addHybridRoutePolicyForPod(net.ParseIP(fmt.Sprintf("10.128.1.%d", podIndex)), "node1")
+					})
+				}
+				close(c)
+				err := g.Wait()
+				fmt.Println("DEBUG: ", err)
+				//gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+				gomega.Eventually(fakeOvn.nbClient).Should(libovsdbtest.HaveDataIgnoringUUIDs(finalNB))
 				return nil
 			}
 
