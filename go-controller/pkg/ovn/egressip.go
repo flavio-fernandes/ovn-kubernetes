@@ -1124,6 +1124,7 @@ func (oc *Controller) syncEgressIPs(eIPs []interface{}) {
 func (oc *Controller) syncStaleEgressReroutePolicy(egressIPToPodIPCache map[string]sets.String, egressIPToPodIPCacheNextHops map[string]sets.String) error {
 	logicalRouter := nbdb.LogicalRouter{}
 	logicalRouterPolicyRes := []nbdb.LogicalRouterPolicy{}
+	logicalRouterPolicyStaleNexthops := make(map[string]nbdb.LogicalRouterPolicy)
 	opModels := []libovsdbops.OperationModel{
 		{
 			ModelPredicate: func(lrp *nbdb.LogicalRouterPolicy) bool {
@@ -1144,10 +1145,18 @@ func (oc *Controller) syncStaleEgressReroutePolicy(egressIPToPodIPCache map[stri
 					klog.Infof("XXX syncStaleEgressReroutePolicy will delete %s due to no nexthops: %v", egressIPName, lrp)
 					return true
 				}
+				// Check for stale nexthops that may exist in the logical router policy and keep it in logicalRouterPolicyStaleNexthops
+				staleNextHops := sets.NewString()
 				for _, nexthop := range lrp.Nexthops {
 					if !podIPCacheNextHops.Has(nexthop) {
-						klog.Infof("XXX syncStaleEgressReroutePolicy will delete %s due to stale nexthop: %v", egressIPName, nexthop)
-						return true
+						staleNextHops.Insert(nexthop)
+					}
+				}
+				if staleNextHops.Len() > 0 {
+					klog.Infof("XXXY syncStaleEgressReroutePolicy will update %s to remove stale nexthops: %v from policy %s", egressIPName, staleNextHops.List(), lrp.UUID)
+					logicalRouterPolicyStaleNexthops[lrp.UUID] = nbdb.LogicalRouterPolicy{
+						UUID: lrp.UUID,
+						Nexthops: staleNextHops.UnsortedList(),
 					}
 				}
 				klog.Infof("XXXY syncStaleEgressReroutePolicy will allow %s: %v", egressIPName, lrp)
@@ -1170,6 +1179,25 @@ func (oc *Controller) syncStaleEgressReroutePolicy(egressIPToPodIPCache map[stri
 	if err := oc.modelClient.Delete(opModels...); err != nil {
 		return fmt.Errorf("unable to remove stale logical router policies, err: %v", err)
 	}
+	klog.Infof("XXXY syncStaleEgressReroutePolicy is done 1 of 2. Ops: %v", opModels)
+
+	// Update Logical Router Policies that have stale nexthops. Notice that we must do this separately and after
+	// opModels because 1) we have no ModelPredicate and 2) logicalRouterPolicyStaleNexthops needs to be assembled
+	opModels = []libovsdbops.OperationModel{}
+	for lrpUUID, _ := range logicalRouterPolicyStaleNexthops {
+		lrp := logicalRouterPolicyStaleNexthops[lrpUUID]
+		opModels = append(opModels, libovsdbops.OperationModel{
+			Model: &lrp,
+			OnModelMutations: []interface{}{
+				&lrp.Nexthops,
+			},
+		})
+	}
+	if err := oc.modelClient.Delete(opModels...); err != nil {
+		return fmt.Errorf("unable to remove stale next hops from logical router policies, err: %v", err)
+	}
+	klog.Infof("XXXY syncStaleEgressReroutePolicy is done 2 of 2. Ops: %v", opModels)
+
 	return nil
 }
 
@@ -1189,7 +1217,6 @@ func (oc *Controller) syncStaleSNATRules(egressIPToPodIPCache map[string]sets.St
 			klog.Infof("syncStaleSNATRules will delete %s due to logical ip: %v", egressIPName, item)
 			return true
 		}
-		// item.ExternalIP
 		podIPCacheNextNodeIP, exists := egressIPToPodIPCacheNodeIP[egressIPName]
 		if !exists {
 			klog.Infof("XXX syncStaleSNATRules will delete %s due to no node ip: %v", egressIPName, item)
