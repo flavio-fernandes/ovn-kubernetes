@@ -1146,7 +1146,7 @@ func (oc *Controller) syncStaleEgressReroutePolicy(egressIPToPodIPCache map[stri
 					klog.Infof("syncStaleEgressReroutePolicy will delete %s due to no nexthops: %v", egressIPName, lrp)
 					return true
 				}
-				// Check for stale nexthops that may exist in the logical router policy and keep it in logicalRouterPolicyStaleNexthops
+				// Check for stale nexthops that may exist in the logical router policy and store that in logicalRouterPolicyStaleNexthops
 				staleNextHops := sets.NewString()
 				for _, nexthop := range lrp.Nexthops {
 					if !podIPCacheNextHops.Has(nexthop) {
@@ -1155,11 +1155,10 @@ func (oc *Controller) syncStaleEgressReroutePolicy(egressIPToPodIPCache map[stri
 				}
 				if staleNextHops.Len() > 0 {
 					logicalRouterPolicyStaleNexthops[lrp.UUID] = nbdb.LogicalRouterPolicy{
-						UUID: lrp.UUID,
+						UUID:     lrp.UUID,
 						Nexthops: staleNextHops.UnsortedList(),
 					}
 				}
-				klog.Infof("syncStaleEgressReroutePolicy will allow %s: %v", egressIPName, lrp)
 				return false
 			},
 			ExistingResult: &logicalRouterPolicyRes,
@@ -1181,9 +1180,9 @@ func (oc *Controller) syncStaleEgressReroutePolicy(egressIPToPodIPCache map[stri
 	}
 
 	// Update Logical Router Policies that have stale nexthops. Notice that we must do this separately
-	// because 1) Use no ModelPredicate and 2) logicalRouterPolicyStaleNexthops must be populated
+	// because 1) there is no model predicates, and 2) logicalRouterPolicyStaleNexthops must be populated
 	opModels2 := make([]libovsdbops.OperationModel, 0, len(logicalRouterPolicyStaleNexthops))
-	for lrpUUID, _ := range logicalRouterPolicyStaleNexthops {
+	for lrpUUID := range logicalRouterPolicyStaleNexthops {
 		lrp := logicalRouterPolicyStaleNexthops[lrpUUID]
 		klog.Infof("syncStaleEgressReroutePolicy will update %s to remove stale nexthops: %v", lrp.UUID, lrp.Nexthops)
 		opModels2 = append(opModels2, libovsdbops.OperationModel{
@@ -1218,14 +1217,13 @@ func (oc *Controller) syncStaleSNATRules(egressIPToPodIPCache map[string]sets.St
 		}
 		podIPCacheNextNodeIP, exists := egressIPToPodIPCacheNodeIP[egressIPName]
 		if !exists {
-			klog.Infof("XXX syncStaleSNATRules will delete %s due to no node ip: %v", egressIPName, item)
+			klog.Infof("syncStaleSNATRules will delete %s due to no node ip: %v", egressIPName, item)
 			return true
 		}
 		if !podIPCacheNextNodeIP.Has(item.ExternalIP) {
-				klog.Infof("XXX syncStaleSNATRules will delete %s due to external ip: %v", egressIPName, item)
-				return true
+			klog.Infof("syncStaleSNATRules will delete %s due to external ip: %v", egressIPName, item)
+			return true
 		}
-		klog.Infof("XXXY syncStaleSNATRules will allow %s: %v", egressIPName, item)
 		return false
 	}
 
