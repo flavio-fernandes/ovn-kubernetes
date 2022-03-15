@@ -1997,7 +1997,7 @@ var _ = ginkgo.Describe("OVN Egress Gateway Operations", func() {
 
 				g := new(errgroup.Group)
 				c := make(chan int)
-				for i := 1; i <= 3; i++ {
+				for i := 1; i <= 2; i++ {
 					podIndex := i
 					g.Go(func() error {
 						<-c
@@ -2007,7 +2007,7 @@ var _ = ginkgo.Describe("OVN Egress Gateway Operations", func() {
 				close(c)
 				err := g.Wait()
 				fmt.Println("DEBUG: ", err)
-				//gomega.Expect(err).NotTo(gomega.HaveOccurred())
+				gomega.Expect(err).To(gomega.HaveOccurred())
 
 				gomega.Eventually(fakeOvn.nbClient).Should(libovsdbtest.HaveDataIgnoringUUIDs(finalNB))
 				return nil

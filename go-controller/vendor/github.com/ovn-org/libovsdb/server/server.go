@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/cenkalti/rpc2"
@@ -229,6 +230,12 @@ func (o *OvsdbServer) Transact(client *rpc2.Client, args []json.RawMessage, repl
 	}
 	response, updates := o.transact(db, ops)
 	*reply = response
+	for i, operResult := range response {
+		if operResult.Error != "" {
+			o.logger.V(5).Info("Skipping transaction DB commit due to error in response", strconv.Itoa(i), operResult.Error)
+			return nil
+		}
+	}
 	transactionID := uuid.New()
 	o.processMonitors(transactionID, updates)
 	return o.db.Commit(db, transactionID, updates)

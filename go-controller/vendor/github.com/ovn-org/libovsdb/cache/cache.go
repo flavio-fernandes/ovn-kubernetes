@@ -357,7 +357,7 @@ func (r *RowCache) RowsByCondition(conditions []ovsdb.Condition) (map[string]mod
 					results[rowUUID] = row
 				}
 			}
-		} else if index, err := r.Index(condition.Column); err != nil {
+		} else if index, err := r.Index(condition.Column); err == nil {
 			for k, rowUUID := range index {
 				tSchema := schema.Columns[condition.Column]
 				nativeValue, err := ovsdb.OvsToNative(tSchema, condition.Value)
