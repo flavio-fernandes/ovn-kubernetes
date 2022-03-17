@@ -313,24 +313,24 @@ func (m *ModelClient) create(opModel *OperationModel) ([]ovsdb.Operation, error)
 		if !ok {
 			return nil, fmt.Errorf("expected LogicalRouterPolicy model, got: %v", opModel.Model)
 		}
-		// condPriority := model.Condition{
-		// 	Field:    &lrp.Priority,
-		// 	Function: ovsdb.ConditionEqual,
-		// 	Value:    lrp.Priority,
-		// }
-		condMatch := model.Condition{
-			Field:    &lrp.Match,
+		condPriority := model.Condition{
+			Field:    &lrp.Priority,
 			Function: ovsdb.ConditionEqual,
-			Value:    lrp.Match,
+			Value:    lrp.Priority,
 		}
+		// condMatch := model.Condition{
+		// 	Field:    &lrp.Match,
+		// 	Function: ovsdb.ConditionEqual,
+		// 	Value:    lrp.Match,
+		// }
 		// waitOps, err := m.client.WhereAll(lrp, condPriority, condMatch).Wait(
-		// waitOps, err := m.client.WhereAll(lrp, condPriority).Wait(
-		waitOps, err := m.client.Where(lrp, condMatch).Wait(
+		// waitOps, err := m.client.Where(lrp, condMatch).Wait(
+		waitOps, err := m.client.Where(lrp, condPriority).Wait(
 			ovsdb.WaitConditionNotEqual,
 			&timeout,
 			lrp,
-			// &lrp.Priority,
-			&lrp.Match,
+			&lrp.Priority,
+			// &lrp.Match,
 		)
 		if err != nil {
 			return nil, err
