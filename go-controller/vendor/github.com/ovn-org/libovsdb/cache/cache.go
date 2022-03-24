@@ -383,7 +383,13 @@ func (r *RowCache) RowsByCondition(conditions []ovsdb.Condition) (map[string]mod
 				if err != nil {
 					return nil, err
 				}
-				ok, err := condition.Function.Evaluate(value, condition.Value)
+				tSchema := schema.Columns[condition.Column]
+				nativeValue, err := ovsdb.OvsToNative(tSchema, condition.Value)
+				if err != nil {
+					return nil, err
+				}
+				ok, err := condition.Function.Evaluate(value, nativeValue)
+				// ok, err := condition.Function.Evaluate(value, condition.Value)
 				if err != nil {
 					return nil, err
 				}

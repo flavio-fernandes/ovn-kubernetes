@@ -100,9 +100,18 @@ func (t *Transaction) rowsFromTransactionCacheAndDatabase(table string, where []
 	if err != nil {
 		return nil, fmt.Errorf("failed getting rows for table %s from transaction cache: %v", table, err)
 	}
+
+	nowhere := []ovsdb.Condition{}
+	rowsAll, err := t.Database.List(t.DbName, table, nowhere...)
+
+
 	rows, err := t.Database.List(t.DbName, table, where...)
 	if err != nil {
 		return nil, fmt.Errorf("failed getting rows for table %s from database: %v", table, err)
+	}
+
+	if len(rowsAll) > 0 && len(rows) == 0 {
+		panic(fmt.Errorf("boom"))
 	}
 
 	// prefer rows from transaction cache while copying into cache

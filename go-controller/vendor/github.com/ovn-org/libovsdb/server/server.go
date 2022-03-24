@@ -2,12 +2,15 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"os"
-	"strconv"
+	// "strconv"
 	"sync"
+
+	// "time"
 
 	"github.com/cenkalti/rpc2"
 	"github.com/cenkalti/rpc2/jsonrpc"
@@ -232,13 +235,22 @@ func (o *OvsdbServer) Transact(client *rpc2.Client, args []json.RawMessage, repl
 	*reply = response
 	for i, operResult := range response {
 		if operResult.Error != "" {
-			o.logger.V(5).Info("Skipping transaction DB commit due to error in response", strconv.Itoa(i), operResult.Error)
+			// o.logger.V(5).Info("Skipping transaction DB commit due to error in response", strconv.Itoa(i), operResult.Error)
+			// o.logger.Error(errors.New("failed to process operation"), "Skipping transaction DB commit due to error", "operations", ops, "failed operation", ops[i], "operation error", operResult.Error)
+			// opsJson, _ := ops[i].MarshalJSON()
+			// o.logger.Error(errors.New("XX failed to process operation"), "Skipping transaction DB commit due to error", "failed operation", string(opsJson), "operation error", operResult.Error)
+			opsStr := fmt.Sprintf("%v", ops)
+			fopStr := fmt.Sprintf("%v", ops[i])
+			o.logger.Error(errors.New("failed to process operation"), "XX Skipping transaction DB commit due to error", "operations", opsStr, "failed operation", fopStr, "operation error", operResult.Error)
 			return nil
 		}
 	}
 	transactionID := uuid.New()
 	o.processMonitors(transactionID, updates)
-	return o.db.Commit(db, transactionID, updates)
+	rc := o.db.Commit(db, transactionID, updates)
+	// putting a sleep here does not make a difference at all!
+	// time.Sleep(2 * time.Second)
+	return rc
 }
 
 func deepCopy(a ovsdb.TableUpdates) (ovsdb.TableUpdates, error) {

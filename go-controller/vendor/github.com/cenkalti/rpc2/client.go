@@ -8,6 +8,7 @@ import (
 	"log"
 	"reflect"
 	"sync"
+	// "time"
 )
 
 // Client represents an RPC Client.
@@ -130,6 +131,11 @@ func (c *Client) readLoop() {
 
 func (c *Client) handleRequest(req Request, method *handler, argv reflect.Value) {
 	// Invoke the method, providing a new value for the reply.
+
+	// HACK!!!
+	// time.Sleep(1 * time.Second)
+
+
 	replyv := reflect.New(method.replyType.Elem())
 
 	returnValues := method.fn.Call([]reflect.Value{reflect.ValueOf(c), argv, replyv})
