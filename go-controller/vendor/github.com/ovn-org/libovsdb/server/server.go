@@ -2,7 +2,7 @@ package server
 
 import (
 	"encoding/json"
-	"errors"
+	// "errors"
 	"fmt"
 	"log"
 	"net"
@@ -242,16 +242,16 @@ func (o *OvsdbServer) Transact(client *rpc2.Client, args []json.RawMessage, repl
 			// o.logger.Error(errors.New("XX failed to process operation"), "Skipping transaction DB commit due to error", "failed operation", string(opsJson), "operation error", operResult.Error)
 			opsStr := fmt.Sprintf("%v", ops)
 			fopStr := fmt.Sprintf("%v", ops[i])
-			o.logger.Error(errors.New("failed to process operation"), "XXX Skipping transaction DB commit due to error", "operations", opsStr, "failed operation", fopStr, "operation error", operResult.Error)
+			// o.logger.Error(errors.New("failed to process operation"), "XXX Skipping transaction DB commit due to error", "operations", opsStr, "failed operation", fopStr, "operation error", operResult.Error)
 			o.logger.Info("XXX no commit due to error", "operations", opsStr, "failed operation", fopStr, "operation error", operResult.Error)
 			return nil
 		}
 	}
 	transactionID := uuid.New()
 	o.processMonitors(transactionID, updates)
-	o.logger.Info("XXX commiting db")
+	o.logger.Info("XXX START commiting db", "transactionID", transactionID)
 	rc := o.db.Commit(db, transactionID, updates)
-	o.logger.Info("XXX commited db")
+	o.logger.Info("XXX END commited db", "transactionID", transactionID)
 	// putting a sleep here does not make a difference at all!
 	// time.Sleep(2 * time.Second)
 	return rc

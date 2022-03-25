@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"time"
 
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/libovsdbops"
@@ -1994,6 +1995,9 @@ var _ = ginkgo.Describe("OVN Egress Gateway Operations", func() {
 						Networks: []string{"100.64.0.4/32"},
 					},
 				}
+
+				time.Sleep(3 * time.Second)
+				fmt.Println("HERE WE GO!!!")
 
 				g := new(errgroup.Group)
 				c := make(chan int)
