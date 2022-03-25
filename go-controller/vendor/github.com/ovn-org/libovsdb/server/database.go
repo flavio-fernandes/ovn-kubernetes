@@ -78,8 +78,7 @@ func (db *inMemoryDatabase) Commit(database string, id uuid.UUID, updates ovsdb.
 	}
 	db.mutex.RLock()
 	targetDb := db.databases[database]
-	db.mutex.RLock()
-	// defer db.mutex.RUnlock()
+	db.mutex.RUnlock()
 	return targetDb.Populate2(updates)
 }
 
@@ -92,7 +91,7 @@ func (db *inMemoryDatabase) CheckIndexes(database string, table string, m model.
 	}
 	db.mutex.RLock()
 	targetDb := db.databases[database]
-	db.mutex.RLock()
+	db.mutex.RUnlock()
 	targetTable := targetDb.Table(table)
 	return targetTable.IndexExists(m)
 }
@@ -106,7 +105,7 @@ func (db *inMemoryDatabase) List(database, table string, conditions ...ovsdb.Con
 	}
 	db.mutex.RLock()
 	targetDb := db.databases[database]
-	db.mutex.RLock()
+	db.mutex.RUnlock()
 
 	targetTable := targetDb.Table(table)
 	if targetTable == nil {
@@ -125,7 +124,7 @@ func (db *inMemoryDatabase) Get(database, table string, uuid string) (model.Mode
 	}
 	db.mutex.RLock()
 	targetDb := db.databases[database]
-	db.mutex.RLock()
+	db.mutex.RUnlock()
 
 	targetTable := targetDb.Table(table)
 	if targetTable == nil {

@@ -460,6 +460,7 @@ func (e *EventHandlerFuncs) OnDelete(table string, row model.Model) {
 // It implements the ovsdb.NotificationHandler interface so it may
 // handle update notifications
 type TableCache struct {
+	ownerName      string
 	cache          map[string]*RowCache
 	eventProcessor *eventProcessor
 	dbModel        model.DatabaseModel
@@ -501,6 +502,7 @@ func NewTableCache(name string, dbModel model.DatabaseModel, data Data, logger *
 		}
 	}
 	return &TableCache{
+		ownerName:      name,
 		cache:          cache,
 		eventProcessor: eventProcessor,
 		dbModel:        dbModel,
@@ -649,7 +651,7 @@ func (t *TableCache) Populate2(tableUpdates ovsdb.TableUpdates2) error {
 		tCache := t.cache[table]
 		for uuid, row := range updates {
 			logger := t.logger.WithValues("uuid", uuid, "table", table)
-			logger.V(5).Info("processing update")
+			logger.Info("XXX processing update", "ownerName", t.ownerName, "rowInitial", row.Initial)
 			switch {
 			case row.Initial != nil:
 				m, err := t.CreateModel(table, row.Initial, uuid)

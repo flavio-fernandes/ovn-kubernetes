@@ -15,7 +15,7 @@ func (o *OvsdbServer) transact(name string, operations []ovsdb.Operation) ([]ovs
 	o.modelsMutex.Lock()
 	dbModel := o.models[name]
 	o.modelsMutex.Unlock()
-	transaction := o.NewTransaction(dbModel, name, o.db)
+	transaction := o.NewTransaction("XXX_OvsdbServer.transact", dbModel, name, o.db)
 
 	results := []ovsdb.OperationResult{}
 	updates := make(ovsdb.TableUpdates2)

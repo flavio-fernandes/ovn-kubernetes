@@ -174,9 +174,9 @@ type Transaction struct {
 	Database    Database
 }
 
-func (o *OvsdbServer) NewTransaction(model model.DatabaseModel, dbName string, database Database) Transaction {
-	o.logger.Info("XXX NewTransaction called fetching a new cache")
-	cache, err := cache.NewTableCache("newTxn_XXX_179", model, nil, &o.logger)
+func (o *OvsdbServer) NewTransaction(name string, model model.DatabaseModel, dbName string, database Database) Transaction {
+	o.logger.Info("XXX NewTransaction called fetching a new cache", "owner", name)
+	cache, err := cache.NewTableCache(name, model, nil, &o.logger)
 	if err != nil {
 		panic(err)
 	}
@@ -242,7 +242,8 @@ func (o *OvsdbServer) Transact(client *rpc2.Client, args []json.RawMessage, repl
 			// o.logger.Error(errors.New("XX failed to process operation"), "Skipping transaction DB commit due to error", "failed operation", string(opsJson), "operation error", operResult.Error)
 			opsStr := fmt.Sprintf("%v", ops)
 			fopStr := fmt.Sprintf("%v", ops[i])
-			o.logger.Error(errors.New("failed to process operation"), "XX Skipping transaction DB commit due to error", "operations", opsStr, "failed operation", fopStr, "operation error", operResult.Error)
+			o.logger.Error(errors.New("failed to process operation"), "XXX Skipping transaction DB commit due to error", "operations", opsStr, "failed operation", fopStr, "operation error", operResult.Error)
+			o.logger.Info("XXX no commit due to error", "operations", opsStr, "failed operation", fopStr, "operation error", operResult.Error)
 			return nil
 		}
 	}
@@ -309,7 +310,7 @@ func (o *OvsdbServer) Monitor(client *rpc2.Client, args []json.RawMessage, reply
 	o.modelsMutex.Lock()
 	dbModel := o.models[db]
 	o.modelsMutex.Unlock()
-	transaction := o.NewTransaction(dbModel, db, o.db)
+	transaction := o.NewTransaction("XXX_Monitor", dbModel, db, o.db)
 
 	tableUpdates := make(ovsdb.TableUpdates)
 	for t, request := range request {
@@ -356,7 +357,7 @@ func (o *OvsdbServer) MonitorCond(client *rpc2.Client, args []json.RawMessage, r
 	o.modelsMutex.Lock()
 	dbModel := o.models[db]
 	o.modelsMutex.Unlock()
-	transaction := o.NewTransaction(dbModel, db, o.db)
+	transaction := o.NewTransaction("XXX_MonitorCond", dbModel, db, o.db)
 
 	tableUpdates := make(ovsdb.TableUpdates2)
 	for t, request := range request {
@@ -401,7 +402,7 @@ func (o *OvsdbServer) MonitorCondSince(client *rpc2.Client, args []json.RawMessa
 	o.modelsMutex.Lock()
 	dbModel := o.models[db]
 	o.modelsMutex.Unlock()
-	transaction := o.NewTransaction(dbModel, db, o.db)
+	transaction := o.NewTransaction("XXX_MonitorCondSince", dbModel, db, o.db)
 
 	tableUpdates := make(ovsdb.TableUpdates2)
 	for t, request := range request {
