@@ -387,7 +387,7 @@ func (o *ovsdbClient) tryEndpoint(ctx context.Context, u *url.URL) (string, erro
 
 		db.cacheMutex.Lock()
 		if db.cache == nil {
-			db.cache, err = cache.NewTableCache(db.model, nil, o.logger)
+			db.cache, err = cache.NewTableCache("client_tryEndpoint_XXX_390", db.model, nil, o.logger)
 			if err != nil {
 				db.cacheMutex.Unlock()
 				return "", err

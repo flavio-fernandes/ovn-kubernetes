@@ -175,7 +175,8 @@ type Transaction struct {
 }
 
 func (o *OvsdbServer) NewTransaction(model model.DatabaseModel, dbName string, database Database) Transaction {
-	cache, err := cache.NewTableCache(model, nil, &o.logger)
+	o.logger.Info("XXX NewTransaction called fetching a new cache")
+	cache, err := cache.NewTableCache("newTxn_XXX_179", model, nil, &o.logger)
 	if err != nil {
 		panic(err)
 	}
@@ -247,7 +248,9 @@ func (o *OvsdbServer) Transact(client *rpc2.Client, args []json.RawMessage, repl
 	}
 	transactionID := uuid.New()
 	o.processMonitors(transactionID, updates)
+	o.logger.Info("XXX commiting db")
 	rc := o.db.Commit(db, transactionID, updates)
+	o.logger.Info("XXX commited db")
 	// putting a sleep here does not make a difference at all!
 	// time.Sleep(2 * time.Second)
 	return rc

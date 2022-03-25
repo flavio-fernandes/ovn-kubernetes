@@ -161,7 +161,7 @@ func apiTestCache(t testing.TB, data map[string]map[string]model.Model) *cache.T
 	assert.Nil(t, err)
 	dbModel, errs := model.NewDatabaseModel(schema, db)
 	assert.Empty(t, errs)
-	cache, err := cache.NewTableCache(dbModel, data, nil)
+	cache, err := cache.NewTableCache("apiTestCache_XXX_164", dbModel, data, nil)
 	assert.Nil(t, err)
 	return cache
 }

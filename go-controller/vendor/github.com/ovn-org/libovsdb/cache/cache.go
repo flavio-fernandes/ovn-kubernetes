@@ -472,7 +472,7 @@ type TableCache struct {
 type Data map[string]map[string]model.Model
 
 // NewTableCache creates a new TableCache
-func NewTableCache(dbModel model.DatabaseModel, data Data, logger *logr.Logger) (*TableCache, error) {
+func NewTableCache(name string, dbModel model.DatabaseModel, data Data, logger *logr.Logger) (*TableCache, error) {
 	if !dbModel.Valid() {
 		return nil, fmt.Errorf("tablecache without valid databasemodel cannot be populated")
 	}
@@ -483,7 +483,7 @@ func NewTableCache(dbModel model.DatabaseModel, data Data, logger *logr.Logger) 
 		l := logger.WithName("cache")
 		logger = &l
 	}
-	eventProcessor := newEventProcessor(bufferSize, logger)
+	eventProcessor := newEventProcessor(name, bufferSize, logger)
 	cache := make(map[string]*RowCache)
 	tableTypes := dbModel.Types()
 	for name := range dbModel.Schema.Tables {
@@ -782,13 +782,15 @@ type eventProcessor struct {
 	// handlersMutex locks the handlers array when we add a handler or dispatch events
 	// we don't need a RWMutex in this case as we only have one thread reading and the write
 	// volume is very low (i.e only when AddEventHandler is called)
+	name          string
 	handlersMutex sync.Mutex
 	handlers      []EventHandler
 	logger        *logr.Logger
 }
 
-func newEventProcessor(capacity int, logger *logr.Logger) *eventProcessor {
+func newEventProcessor(name string, capacity int, logger *logr.Logger) *eventProcessor {
 	return &eventProcessor{
+		name:     name,
 		events:   make(chan event, capacity),
 		handlers: []EventHandler{},
 		logger:   logger,
@@ -836,6 +838,8 @@ func (e *eventProcessor) Run(stopCh <-chan struct{}) {
 		case event := <-e.events:
 			e.handlersMutex.Lock()
 			for _, handler := range e.handlers {
+				eStr := fmt.Sprintf("XXX %s handling event %v", e.name, event)
+				e.logger.Info(eStr)
 				switch event.eventType {
 				case addEvent:
 					handler.OnAdd(event.table, event.new)

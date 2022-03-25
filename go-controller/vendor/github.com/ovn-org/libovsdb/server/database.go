@@ -24,6 +24,7 @@ type inMemoryDatabase struct {
 	databases map[string]*cache.TableCache
 	models    map[string]model.ClientDBModel
 	mutex     sync.RWMutex
+	hackMutex sync.RWMutex
 }
 
 func NewInMemoryDatabase(models map[string]model.ClientDBModel) Database {
@@ -31,10 +32,14 @@ func NewInMemoryDatabase(models map[string]model.ClientDBModel) Database {
 		databases: make(map[string]*cache.TableCache),
 		models:    models,
 		mutex:     sync.RWMutex{},
+		hackMutex: sync.RWMutex{},
 	}
 }
 
 func (db *inMemoryDatabase) CreateDatabase(name string, schema ovsdb.DatabaseSchema) error {
+	db.hackMutex.Lock()
+	defer db.hackMutex.Unlock()
+
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 	var mo model.ClientDBModel
@@ -46,7 +51,7 @@ func (db *inMemoryDatabase) CreateDatabase(name string, schema ovsdb.DatabaseSch
 	if len(errs) > 0 {
 		return fmt.Errorf("failed to create DatabaseModel: %#+v", errs)
 	}
-	database, err := cache.NewTableCache(dbModel, nil, nil)
+	database, err := cache.NewTableCache("createDB_XXX_54", dbModel, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -55,6 +60,9 @@ func (db *inMemoryDatabase) CreateDatabase(name string, schema ovsdb.DatabaseSch
 }
 
 func (db *inMemoryDatabase) Exists(name string) bool {
+	// db.hackMutex.Lock()
+	// defer db.hackMutex.Unlock()
+
 	db.mutex.RLock()
 	defer db.mutex.RUnlock()
 	_, ok := db.databases[name]
@@ -62,16 +70,23 @@ func (db *inMemoryDatabase) Exists(name string) bool {
 }
 
 func (db *inMemoryDatabase) Commit(database string, id uuid.UUID, updates ovsdb.TableUpdates2) error {
+	db.hackMutex.Lock()
+	defer db.hackMutex.Unlock()
+
 	if !db.Exists(database) {
 		return fmt.Errorf("db does not exist")
 	}
 	db.mutex.RLock()
 	targetDb := db.databases[database]
 	db.mutex.RLock()
+	// defer db.mutex.RUnlock()
 	return targetDb.Populate2(updates)
 }
 
 func (db *inMemoryDatabase) CheckIndexes(database string, table string, m model.Model) error {
+	db.hackMutex.Lock()
+	defer db.hackMutex.Unlock()
+
 	if !db.Exists(database) {
 		return nil
 	}
@@ -83,6 +98,9 @@ func (db *inMemoryDatabase) CheckIndexes(database string, table string, m model.
 }
 
 func (db *inMemoryDatabase) List(database, table string, conditions ...ovsdb.Condition) (map[string]model.Model, error) {
+	db.hackMutex.Lock()
+	defer db.hackMutex.Unlock()
+
 	if !db.Exists(database) {
 		return nil, fmt.Errorf("db does not exist")
 	}
@@ -99,6 +117,9 @@ func (db *inMemoryDatabase) List(database, table string, conditions ...ovsdb.Con
 }
 
 func (db *inMemoryDatabase) Get(database, table string, uuid string) (model.Model, error) {
+	db.hackMutex.Lock()
+	defer db.hackMutex.Unlock()
+
 	if !db.Exists(database) {
 		return nil, fmt.Errorf("db does not exist")
 	}
