@@ -1104,7 +1104,7 @@ type egressIPCacheEntry struct {
 	egressIPs        sets.String
 }
 
-func (oc *Controller) syncEgressIPs(eIPs []interface{}) {
+func (oc *Controller) syncEgressIPs(eIPs []interface{}) error {
 	// This part will take of syncing stale data which we might have in OVN if
 	// there's no ovnkube-master running for a while, while there are changes to
 	// pods/egress IPs.
@@ -1112,19 +1112,17 @@ func (oc *Controller) syncEgressIPs(eIPs []interface{}) {
 	// - Egress IPs which have been deleted while ovnkube-master was down
 	// - pods/namespaces which have stopped matching on egress IPs while
 	//   ovnkube-master was down
-	oc.syncWithRetry("syncEgressIPs", func() error {
-		egressIPCache, err := oc.generateCacheForEgressIP(eIPs)
-		if err != nil {
-			return fmt.Errorf("syncEgressIPs unable to generate cache for egressip: %v", err)
-		}
-		if err = oc.syncStaleEgressReroutePolicy(egressIPCache); err != nil {
-			return fmt.Errorf("syncEgressIPs unable to remove stale reroute policies: %v", err)
-		}
-		if err = oc.syncStaleSNATRules(egressIPCache); err != nil {
-			return fmt.Errorf("syncEgressIPs unable to remove stale nats: %v", err)
-		}
-		return nil
-	})
+	egressIPCache, err := oc.generateCacheForEgressIP(eIPs)
+	if err != nil {
+		return fmt.Errorf("syncEgressIPs unable to generate cache for egressip: %v", err)
+	}
+	if err = oc.syncStaleEgressReroutePolicy(egressIPCache); err != nil {
+		return fmt.Errorf("syncEgressIPs unable to remove stale reroute policies: %v", err)
+	}
+	if err = oc.syncStaleSNATRules(egressIPCache); err != nil {
+		return fmt.Errorf("syncEgressIPs unable to remove stale nats: %v", err)
+	}
+	return nil
 }
 
 // This function implements a portion of syncEgressIPs.
@@ -1723,11 +1721,13 @@ func (oc *Controller) deleteNodeForEgress(node *v1.Node) error {
 // egress node experiences problems we want to move all egress IP assignment
 // away from that node elsewhere so that the pods using the egress IP can
 // continue to do so without any issues.
-func (oc *Controller) initClusterEgressPolicies(nodes []interface{}) {
+func (oc *Controller) initClusterEgressPolicies(nodes []interface{}) error {
 	v4ClusterSubnet, v6ClusterSubnet := getClusterSubnets()
+	// TODO(ff): consider returning error here?
 	oc.createDefaultNoReroutePodPolicies(v4ClusterSubnet, v6ClusterSubnet)
 	oc.createDefaultNoRerouteServicePolicies(v4ClusterSubnet, v6ClusterSubnet)
 	go oc.checkEgressNodesReachability()
+	return nil
 }
 
 // egressNode is a cache helper used for egress IP assignment, representing an egress node

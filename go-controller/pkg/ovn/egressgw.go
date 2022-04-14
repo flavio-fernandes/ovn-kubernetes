@@ -948,7 +948,7 @@ func (oc *Controller) extSwitchPrefix(nodeName string) (string, error) {
 	return "", nil
 }
 
-func (oc *Controller) cleanExGwECMPRoutes() {
+func (oc *Controller) cleanExGwECMPRoutes() error {
 	start := time.Now()
 	defer func() {
 		klog.Infof("Syncing exgw routes took %v", time.Since(start))
@@ -976,7 +976,7 @@ func (oc *Controller) cleanExGwECMPRoutes() {
 			klog.Errorf("Error while removing hybrid policies, error: %v", err)
 		}
 		// nothing in OVN, so no reason to search for stale routes
-		return
+		return nil
 	}
 
 	// Build cache of expected routes in the cluster
@@ -1014,6 +1014,7 @@ func (oc *Controller) cleanExGwECMPRoutes() {
 				// we shouldn't continue in this case, because we cant be sure this is a route we want to remove
 				klog.Errorf("Cannot sync exgw route: %+v, unable to determine exgw switch prefix: %v",
 					ovnRoute, err)
+				// TODO(ff): consider returning error here?
 			} else if (prefix != "" && !strings.Contains(ovnRoute.outport, prefix)) ||
 				(prefix == "" && strings.Contains(ovnRoute.outport, types.EgressGWSwitchPrefix)) {
 				continue
@@ -1053,6 +1054,7 @@ func (oc *Controller) cleanExGwECMPRoutes() {
 				}
 				if err := oc.modelClient.Delete(opModels...); err != nil {
 					klog.Errorf("Failed to destroy Logical_Router_Static_Route %s, err: %v", ovnRoute.uuid, err)
+					// TODO(ff): consider returning error here?
 				}
 
 				// check to see if we should also clean up bfd
@@ -1065,9 +1067,11 @@ func (oc *Controller) cleanExGwECMPRoutes() {
 					// we shouldn't continue in this case, because we cant be sure this is a route we want to remove
 					klog.Errorf("Cannot sync exgw bfd: %+v, unable to determine exgw switch prefix: %v",
 						ovnRoute, err)
+					// TODO(ff): consider returning error here?
 				} else {
 					if err := oc.cleanUpBFDEntry(ovnRoute.nextHop, ovnRoute.router, prefix); err != nil {
 						klog.Errorf("Cannot clean up BFD entry: %w", err)
+						// TODO(ff): consider returning error here?
 					}
 				}
 
@@ -1083,10 +1087,12 @@ func (oc *Controller) cleanExGwECMPRoutes() {
 				if err := oc.delHybridRoutePolicyForPod(net.ParseIP(podIP), gr); err != nil {
 					klog.Errorf("Error while removing hybrid policy for pod IP: %s, on node: %s, error: %v",
 						podIP, gr, err)
+					// TODO(ff): consider returning error here?
 				}
 			}
 		}
 	}
+	return nil
 }
 
 func getExGwPodIPs(gatewayPod *kapi.Pod) ([]net.IP, error) {

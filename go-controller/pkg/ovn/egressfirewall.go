@@ -95,14 +95,10 @@ func newEgressFirewallRule(rawEgressFirewallRule egressfirewallapi.EgressFirewal
 // -    Cleanup for migration from shared GW mode -> local GW mode
 //      For this it just deletes all the ACLs on the distributed join switch
 
-// NOTE: Utilize the fact that we know that all egress firewall related setup must have a priority: types.MinimumReservedEgressFirewallPriority <= priority <= types.EgressFirewallStartPriority
-func (oc *Controller) syncEgressFirewall(egressFirewalls []interface{}) {
-	oc.syncWithRetry("syncEgressFirewall", func() error { return oc.syncEgressFirewallRetriable(egressFirewalls) })
-}
-
 // This function implements the main body of work of what is described by syncEgressFirewall.
 // Upon failure, it may be invoked multiple times in order to avoid a pod restart.
-func (oc *Controller) syncEgressFirewallRetriable(egressFirewalls []interface{}) error {
+// NOTE: Utilize the fact that we know that all egress firewall related setup must have a priority: types.MinimumReservedEgressFirewallPriority <= priority <= types.EgressFirewallStartPriority
+func (oc *Controller) syncEgressFirewall(egressFirewalls []interface{})  error {
 	// Lookup all ACLs used for egress Firewalls
 	egressFirewallACLs, err := libovsdbops.FindACLsByPriorityRange(oc.nbClient, types.MinimumReservedEgressFirewallPriority, types.EgressFirewallStartPriority)
 	if err != nil {
