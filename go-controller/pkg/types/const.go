@@ -179,4 +179,6 @@ const (
 	Layer3Topology   = "layer3"
 	Layer2Topology   = "layer2"
 	LocalnetTopology = "localnet"
+
+	OvnDefaultZone = "global"
 )

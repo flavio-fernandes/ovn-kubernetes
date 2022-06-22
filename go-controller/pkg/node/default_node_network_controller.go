@@ -484,6 +484,15 @@ func createNodeManagementPorts(name string, nodeAnnotator kube.Annotator, waiter
 	return mgmtPorts, mgmtPortConfig, nil
 }
 
+func getOVNSBZone() string {
+	dbZone, _, err := util.RunOVNSbctl("get", "SB_Global", ".", "options:name")
+	if err != nil {
+		dbZone = "global"
+	}
+
+	return dbZone
+}
+
 // Start learns the subnets assigned to it by the master controller
 // and calls the SetupNode script which establishes the logical switch
 func (nc *DefaultNodeNetworkController) Start(ctx context.Context) error {
@@ -598,6 +607,10 @@ func (nc *DefaultNodeNetworkController) Start(ctx context.Context) error {
 		if err := nc.initGateway(subnets, nodeAnnotator, waiter, mgmtPortConfig, nodeAddr); err != nil {
 			return err
 		}
+	}
+
+	if err := util.SetNodeZone(nodeAnnotator, getOVNSBZone()); err != nil {
+		return fmt.Errorf("failed to set node zone annotation for node %s: %v", nc.name, err)
 	}
 
 	if err := nodeAnnotator.Run(); err != nil {
