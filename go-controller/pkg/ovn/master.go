@@ -704,6 +704,7 @@ type nodeSyncs struct {
 	syncMgmtPort          bool
 	syncGw                bool
 	syncHo                bool
+	syncZoneIc            bool
 }
 
 func (oc *DefaultNetworkController) addUpdateLocalNodeEvent(node *kapi.Node, nSyncs *nodeSyncs) error {
@@ -740,6 +741,9 @@ func (oc *DefaultNetworkController) addUpdateLocalNodeEvent(node *kapi.Node, nSy
 			oc.mgmtPortFailed.Store(node.Name, true)
 			oc.gatewaysFailed.Store(node.Name, true)
 			oc.hybridOverlayFailed.Store(node.Name, config.HybridOverlay.Enabled)
+			if nSyncs.syncZoneIc {
+				oc.syncZoneIcFailed.Store(node.Name, true)
+			}
 			err = fmt.Errorf("nodeAdd: error adding node %q: %w", node.Name, err)
 			oc.recordNodeErrorEvent(node, err)
 			return err
@@ -820,20 +824,50 @@ func (oc *DefaultNetworkController) addUpdateLocalNodeEvent(node *kapi.Node, nSy
 		}
 	}
 
+	if nSyncs.syncZoneIc && config.OVNKubernetesFeature.EnableInterconnect {
+		if err := oc.zoneChassisHandler.AddLocalZoneNode(node); err != nil {
+			errs = append(errs, err)
+			oc.syncZoneIcFailed.Store(node.Name, true)
+		} else {
+			if err := oc.zoneICHandler.AddLocalZoneNode(node); err != nil {
+				errs = append(errs, err)
+				oc.syncZoneIcFailed.Store(node.Name, true)
+			} else {
+				oc.syncZoneIcFailed.Delete(node.Name)
+			}
+		}
+	}
+
 	err = kerrors.NewAggregate(errs)
 	if err != nil {
 		oc.recordNodeErrorEvent(node, err)
 	}
+
 	return err
 }
 
-func (oc *DefaultNetworkController) addUpdateRemoteNodeEvent(node *kapi.Node) error {
+func (oc *DefaultNetworkController) addUpdateRemoteNodeEvent(node *kapi.Node, syncZoneIc bool) error {
 	_, present := oc.localZoneNodes.Load(node.Name)
 
 	if present {
 		_ = oc.deleteNodeEvent(node)
 	}
-	return nil
+
+	var err error
+	if syncZoneIc && config.OVNKubernetesFeature.EnableInterconnect {
+		if err = oc.zoneChassisHandler.AddRemoteZoneNode(node); err != nil {
+			klog.Error(err)
+			oc.syncZoneIcFailed.Store(node.Name, true)
+		} else {
+			if err = oc.zoneICHandler.AddRemoteZoneNode(node); err != nil {
+				klog.Error(err)
+				oc.syncZoneIcFailed.Store(node.Name, true)
+			} else {
+				oc.syncZoneIcFailed.Delete(node.Name)
+			}
+		}
+	}
+	return err
 }
 
 func (oc *DefaultNetworkController) deleteNodeEvent(node *kapi.Node) error {
@@ -853,6 +887,7 @@ func (oc *DefaultNetworkController) deleteNodeEvent(node *kapi.Node) error {
 			return err
 		}
 	}
+
 	oc.localZoneNodes.Delete(node.Name)
 
 	if err := oc.deleteNode(node.Name); err != nil {
@@ -863,6 +898,17 @@ func (oc *DefaultNetworkController) deleteNodeEvent(node *kapi.Node) error {
 	oc.mgmtPortFailed.Delete(node.Name)
 	oc.gatewaysFailed.Delete(node.Name)
 	oc.nodeClusterRouterPortFailed.Delete(node.Name)
+
+	if config.OVNKubernetesFeature.EnableInterconnect {
+		if err := oc.zoneICHandler.DeleteNode(node); err != nil {
+			return err
+		}
+		if err := oc.zoneChassisHandler.DeleteNode(node); err != nil {
+			return err
+		}
+		oc.syncZoneIcFailed.Delete(node.Name)
+	}
+
 	return nil
 }
 
