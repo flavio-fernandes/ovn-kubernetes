@@ -9,6 +9,7 @@ import (
 
 	kapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	utilnet "k8s.io/utils/net"
 
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/kube"
@@ -81,6 +82,10 @@ const (
 	// ovnNodeZoneName is the zone to which the node belongs to. It is set by ovnkube-node.
 	// ovnkube-node gets the node's zone from the OVN Southbound database.
 	ovnNodeZoneName = "k8s.ovn.org/ovn-zone"
+
+	// ovnGatewayRouterPortIPs is the annotation to store the node Gateway router port ips.
+	// It is set by network controller manager.
+	ovnGatewayRouterPortIPs = "k8s.ovn.org/ovn-gw-router-port-ips"
 )
 
 type L3GatewayConfig struct {
@@ -598,4 +603,58 @@ func GetNodeZone(node *kapi.Node) string {
 	}
 
 	return zoneName
+}
+
+func parseNodeAnnotationAddresses(node *kapi.Node, annotation string) ([]*net.IPNet, error) {
+	annotationIps, ok := node.Annotations[annotation]
+	if !ok {
+		return nil, newAnnotationNotSetError("%s annotation not found for node %q", annotation, node.Name)
+	}
+
+	var ipaddrStrs []string
+	if err := json.Unmarshal([]byte(annotationIps), &ipaddrStrs); err != nil {
+		return nil, fmt.Errorf("error unmarshalling %q value: %v", annotation, err)
+	}
+
+	var ips []*net.IPNet
+	for _, ipStr := range ipaddrStrs {
+		_, ipNet, err := net.ParseCIDR(ipStr)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing %q value: %v", annotation, err)
+		}
+
+		ips = append(ips, ipNet)
+
+	}
+	return ips, nil
+}
+
+// UpdateNodeGatewayRouterPortIPsAnnotation updates the ovnGatewayRouterPortIPs annotation with the node gateway router port ips.
+func UpdateNodeGatewayRouterPortIPsAnnotation(annotations map[string]string, ips []*net.IPNet) (map[string]string, error) {
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	ipaddrStrs := make([]string, len(ips))
+	for i, ip := range ips {
+		var prefixLen int
+		if utilnet.IsIPv6CIDR(ip) {
+			prefixLen = 128
+		} else {
+			prefixLen = 32
+		}
+		ipaddrStrs[i] = fmt.Sprintf("%s/%d", ip.IP, prefixLen)
+	}
+	bytes, err := json.Marshal(ipaddrStrs)
+	if err != nil {
+		return nil, err
+	}
+	annotations[ovnGatewayRouterPortIPs] = string(bytes)
+
+	return annotations, nil
+}
+
+// ParseNodeGRIPsAnnotation parses the node gateway router port ips stored in
+// in the ovnGatewayRouterPortIPs annotation.
+func ParseNodeGRIPsAnnotation(node *kapi.Node) ([]*net.IPNet, error) {
+	return parseNodeAnnotationAddresses(node, ovnGatewayRouterPortIPs)
 }
