@@ -366,19 +366,22 @@ jobs:
         # second-bridge: ["2br", "1br"]
         # separate-cluster-manager: ["true", "false"]
         include:
-          - {"target": "shard-conformance", "ha": "HA",   "gateway-mode": "local",  "ipfamily": "ipv6",      "disable-snat-multiple-gws": "snatGW",   "second-bridge": "1br", "separate-cluster-manager": "false"}
-          - {"target": "shard-conformance", "ha": "HA",   "gateway-mode": "local",  "ipfamily": "dualstack", "disable-snat-multiple-gws": "snatGW",   "second-bridge": "1br", "separate-cluster-manager": "false"}
-          - {"target": "shard-conformance", "ha": "HA",   "gateway-mode": "shared", "ipfamily": "ipv4",      "disable-snat-multiple-gws": "snatGW",   "second-bridge": "1br", "separate-cluster-manager": "false"}
-          - {"target": "shard-conformance", "ha": "HA",   "gateway-mode": "shared", "ipfamily": "ipv6",      "disable-snat-multiple-gws": "snatGW",   "second-bridge": "1br", "separate-cluster-manager": "true"}
-          - {"target": "shard-conformance", "ha": "noHA", "gateway-mode": "local",  "ipfamily": "ipv4",      "disable-snat-multiple-gws": "snatGW",   "second-bridge": "1br", "separate-cluster-manager": "true"}
-          - {"target": "control-plane",     "ha": "HA",   "gateway-mode": "shared", "ipfamily": "ipv4",      "disable-snat-multiple-gws": "noSnatGW", "second-bridge": "1br", "separate-cluster-manager": "false"}
-          - {"target": "control-plane",     "ha": "HA",   "gateway-mode": "shared", "ipfamily": "ipv4",      "disable-snat-multiple-gws": "snatGW",   "second-bridge": "1br", "separate-cluster-manager": "true"}
-          - {"target": "control-plane",     "ha": "noHA", "gateway-mode": "local",  "ipfamily": "ipv4",      "disable-snat-multiple-gws": "noSnatGW", "second-bridge": "2br", "separate-cluster-manager": "false"}
-          - {"target": "control-plane",     "ha": "noHA", "gateway-mode": "local",  "ipfamily": "ipv4",      "disable-snat-multiple-gws": "noSnatGW", "second-bridge": "1br", "separate-cluster-manager": "true"}
-          - {"target": "control-plane",     "ha": "noHA", "gateway-mode": "shared", "ipfamily": "ipv4",      "disable-snat-multiple-gws": "noSnatGW", "second-bridge": "2br", "separate-cluster-manager": "false"}
-          - {"target": "multi-homing",      "ha": "noHA", "gateway-mode": "local",  "ipfamily": "ipv4",      "disable-snat-multiple-gws": "SnatGW",   "second-bridge": "1br", "separate-cluster-manager": "false"}
-          - {"target": "node-ip-migration", "ha": "noHA", "gateway-mode": "shared", "ipfamily": "ipv6",      "disable-snat-multiple-gws": "SnatGW",   "second-bridge": "1br", "separate-cluster-manager": "true"}
-          - {"target": "node-ip-migration", "ha": "noHA", "gateway-mode": "local",  "ipfamily": "ipv4",      "disable-snat-multiple-gws": "SnatGW",   "second-bridge": "1br", "separate-cluster-manager": "false"}
+          - {"target": "shard-conformance", "ha": "HA",   "gateway-mode": "local",  "ipfamily": "ipv6",      "disable-snat-multiple-gws": "snatGW",   "second-bridge": "1br", "separate-cluster-manager": "false", "interconnect": "false"}
+          - {"target": "shard-conformance", "ha": "HA",   "gateway-mode": "local",  "ipfamily": "dualstack", "disable-snat-multiple-gws": "snatGW",   "second-bridge": "1br", "separate-cluster-manager": "false", "interconnect": "false"}
+          - {"target": "shard-conformance", "ha": "HA",   "gateway-mode": "shared", "ipfamily": "ipv4",      "disable-snat-multiple-gws": "snatGW",   "second-bridge": "1br", "separate-cluster-manager": "false", "interconnect": "false"}
+          - {"target": "shard-conformance", "ha": "HA",   "gateway-mode": "shared", "ipfamily": "ipv6",      "disable-snat-multiple-gws": "snatGW",   "second-bridge": "1br", "separate-cluster-manager": "true",  "interconnect": "false"}
+          - {"target": "shard-conformance", "ha": "noHA", "gateway-mode": "local",  "ipfamily": "ipv4",      "disable-snat-multiple-gws": "snatGW",   "second-bridge": "1br", "separate-cluster-manager": "true",  "interconnect": "false"}
+          - {"target": "control-plane",     "ha": "HA",   "gateway-mode": "shared", "ipfamily": "ipv4",      "disable-snat-multiple-gws": "noSnatGW", "second-bridge": "1br", "separate-cluster-manager": "false", "interconnect": "false"}
+          - {"target": "control-plane",     "ha": "HA",   "gateway-mode": "shared", "ipfamily": "ipv4",      "disable-snat-multiple-gws": "snatGW",   "second-bridge": "1br", "separate-cluster-manager": "true",  "interconnect": "false"}
+          - {"target": "control-plane",     "ha": "noHA", "gateway-mode": "local",  "ipfamily": "ipv4",      "disable-snat-multiple-gws": "noSnatGW", "second-bridge": "2br", "separate-cluster-manager": "false", "interconnect": "false"}
+          - {"target": "control-plane",     "ha": "noHA", "gateway-mode": "local",  "ipfamily": "ipv4",      "disable-snat-multiple-gws": "noSnatGW", "second-bridge": "1br", "separate-cluster-manager": "true",  "interconnect": "false"}
+          - {"target": "control-plane",     "ha": "noHA", "gateway-mode": "shared", "ipfamily": "ipv4",      "disable-snat-multiple-gws": "noSnatGW", "second-bridge": "2br", "separate-cluster-manager": "false", "interconnect": "false"}
+          - {"target": "multi-homing",      "ha": "noHA", "gateway-mode": "local",  "ipfamily": "ipv4",      "disable-snat-multiple-gws": "SnatGW",   "second-bridge": "1br", "separate-cluster-manager": "false", "interconnect": "false"}
+          - {"target": "node-ip-migration", "ha": "noHA", "gateway-mode": "shared", "ipfamily": "ipv6",      "disable-snat-multiple-gws": "SnatGW",   "second-bridge": "1br", "separate-cluster-manager": "true",  "interconnect": "false"}
+          - {"target": "node-ip-migration", "ha": "noHA", "gateway-mode": "local",  "ipfamily": "ipv4",      "disable-snat-multiple-gws": "SnatGW",   "second-bridge": "1br", "separate-cluster-manager": "false", "interconnect": "false"}
+          - {"target": "shard-conformance", "ha": "noHA", "gateway-mode": "shared", "ipfamily": "ipv4",      "disable-snat-multiple-gws": "snatGW",   "second-bridge": "1br", "separate-cluster-manager": "true",  "interconnect": "true"}
+          - {"target": "control-plane",     "ha": "noHA", "gateway-mode": "shared", "ipfamily": "ipv4",      "disable-snat-multiple-gws": "noSnatGW", "second-bridge": "1br", "separate-cluster-manager": "true",  "interconnect": "true"}
+          - {"target": "node-ip-migration", "ha": "noHA", "gateway-mode": "local",  "ipfamily": "ipv4",      "disable-snat-multiple-gws": "SnatGW",   "second-bridge": "1br", "separate-cluster-manager": "false", "interconnect": "true"}
     needs: [ build-pr ]
     env:
       JOB_NAME: "${{ matrix.target }}-${{ matrix.ha }}-${{ matrix.gateway-mode }}-${{ matrix.ipfamily }}-${{ matrix.disable-snat-multiple-gws }}-${{ matrix.second-bridge }}"
@@ -394,6 +397,7 @@ jobs:
       KIND_IPV6_SUPPORT: "${{ matrix.ipfamily == 'IPv6' || matrix.ipfamily == 'dualstack' }}"
       ENABLE_MULTI_NET: "${{ matrix.target == 'multi-homing' }}"
       OVN_SEPARATE_CLUSTER_MANAGER: "${{ matrix.separate-cluster-manager == 'true' }}"
+      OVN_INTERCONNECT_ENABLE: "${{ matrix.interconnect == 'true' }}"
     steps:
 
     - name: Free up disk space
