@@ -524,6 +524,11 @@ func (nc *DefaultNodeNetworkController) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to parse kubernetes node IP address. %v", err)
 	}
 
+	nodeZone := getOVNSBZone()
+	if config.Default.Zone != nodeZone {
+		return fmt.Errorf("node %s zone [%s] mismatch with the Southbound zone [%s]", nc.name, config.Default.Zone, nodeZone)
+	}
+
 	if config.OvnKubeNode.Mode != types.NodeModeDPUHost {
 		for _, auth := range []config.OvnAuthConfig{config.OvnNorth, config.OvnSouth} {
 			if err := auth.SetDBAuth(); err != nil {
@@ -610,7 +615,7 @@ func (nc *DefaultNodeNetworkController) Start(ctx context.Context) error {
 		}
 	}
 
-	if err := util.SetNodeZone(nodeAnnotator, getOVNSBZone()); err != nil {
+	if err := util.SetNodeZone(nodeAnnotator, nodeZone); err != nil {
 		return fmt.Errorf("failed to set node zone annotation for node %s: %v", nc.name, err)
 	}
 
