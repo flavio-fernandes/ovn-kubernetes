@@ -1,6 +1,7 @@
 package ovn
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -20,12 +21,15 @@ import (
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
 	egressipv1 "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/egressip/v1"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/factory"
+	health_grpc "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/grpc"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/libovsdbops"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/metrics"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/nbdb"
 
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/types"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	kapi "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -2168,7 +2172,7 @@ func (oc *Controller) isReachable(node *egressNode) bool {
 	if oc.eIPC.egressIPNodeHealthCheckPort == 0 {
 		return oc.isReachableViaDial(node)
 	}
-	return oc.isReachableViaGRPC(node)
+	return oc.isReachableViaGRPC(node, oc.eIPC.egressIPNodeHealthCheckPort)
 }
 
 func (oc *Controller) isReachableViaDial(node *egressNode) bool {
@@ -2235,9 +2239,46 @@ func (e *egressIPDial) dial(ip net.IP, timeout time.Duration) bool {
 	return true
 }
 
-func (oc *Controller) isReachableViaGRPC(node *egressNode) bool {
+func (oc *Controller) isReachableViaGRPC(node *egressNode, health_check_port int) bool {
 	klog.Infof("XXX TODO(flaviof) grpc client code goes here %s", node.name)
-	return true
+
+	var conn *grpc.ClientConn
+	var node_addr string
+	var err error
+
+	for _, node_mgmt_ip := range node.mgmtIPs {
+		initialDialTimeOut := 2 * time.Second
+		dial_ctx, dial_cancel := context.WithTimeout(context.Background(), initialDialTimeOut)
+		defer dial_cancel()
+
+		options := []grpc.DialOption{
+			grpc.WithBlock(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		}
+		node_addr = fmt.Sprintf("%s:%d", node_mgmt_ip.String(), health_check_port)
+		klog.Infof("XXX dialing %s (%s)", node.name, node_addr)
+		conn, err = grpc.DialContext(dial_ctx, node_addr, options...)
+		if err == nil && conn != nil {
+			break
+		}
+	}
+	if conn == nil {
+		klog.Warningf("XXX could not connect to %s: %v", node.name, err)
+		return false
+	}
+	defer conn.Close()
+
+	health_client := health_grpc.NewHealthClient(conn)
+	req_timeout := types.OVSDBTimeout
+	req_ctx, req_cancel := context.WithTimeout(context.Background(), req_timeout)
+	defer req_cancel()
+	response, err := health_client.Check(req_ctx, &health_grpc.HealthCheckRequest{Service: health_grpc.ServiceEgressIpNode})
+	if err != nil {
+		klog.Warningf("XXX could not check %s (%s): %s", node.name, node_addr, err)
+	}
+
+	klog.Infof("XXX got response from %s: %v", node.name, response.GetStatus())
+	return response.GetStatus() == health_grpc.HealthCheckResponse_SERVING
 }
 
 func getClusterSubnets() ([]*net.IPNet, []*net.IPNet) {
