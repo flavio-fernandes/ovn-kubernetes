@@ -1,0 +1,45 @@
+
+grab proto from: https://github.com/grpc/grpc/blob/master/doc/health-checking.md
+
+added:  
+```
+option go_package = "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/grpc";
+```
+
+```
+go get google.golang.org/grpc
+go mod tidy
+```
+
+
+```
+export PATH="$PATH:$(go env GOPATH)/bin"
+
+protoc --go_out=. --go_opt=paths=source_relative \
+    --go-grpc_out=. --go-grpc_opt=paths=source_relative health.proto
+```
+
+
+
+---
+
+
+testing locally
+```
+cd ~/dev/learning_grpc/health
+
+go mod init example.com/health
+go get google.golang.org/grpc
+
+export PATH="$PATH:$(go env GOPATH)/bin"
+
+mkdir -pv grpc
+protoc --go_out=./grpc --go_opt=paths=source_relative \
+    --go-grpc_out=./grpc --go-grpc_opt=paths=source_relative health.proto
+```
+
+
+TODO: look at   https://github.com/grpc/grpc-go/blob/master/examples/features/encryption/TLS/client/main.go   <--- TLS
+https://developpaper.com/golang-sets-the-timeout-of-the-client-in-grpc/
+https://github.com/grpc/grpc-go/tree/master/examples/features    <==== COOL!
+
