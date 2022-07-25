@@ -4,7 +4,7 @@
 // 	protoc        v3.14.0
 // source: health.proto
 
-package grpc
+package healthchecking
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
