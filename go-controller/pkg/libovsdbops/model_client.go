@@ -182,7 +182,11 @@ func onModelUpdatesAllNonDefault() []interface{} {
  If BulkOp is set, update or mutate can happen accross multiple models found.
 */
 func (m *modelClient) CreateOrUpdate(opModels ...operationModel) ([]ovsdb.OperationResult, error) {
-	created, ops, err := m.createOrUpdateOps(nil, opModels...)
+	return m.HackedCreateOrUpdate(false, opModels...)
+}
+
+func (m *modelClient) HackedCreateOrUpdate(forceCreate bool, opModels ...operationModel) ([]ovsdb.OperationResult, error) {
+	created, ops, err := m.hackedCreateOrUpdateOps(forceCreate, nil, opModels...)
 	if err != nil {
 		return nil, err
 	}
@@ -195,6 +199,10 @@ func (m *modelClient) CreateOrUpdateOps(ops []ovsdb.Operation, opModels ...opera
 }
 
 func (m *modelClient) createOrUpdateOps(ops []ovsdb.Operation, opModels ...operationModel) (interface{}, []ovsdb.Operation, error) {
+	return m.hackedCreateOrUpdateOps(false, ops, opModels...)
+}
+
+func (m *modelClient) hackedCreateOrUpdateOps(forceCreate bool, ops []ovsdb.Operation, opModels ...operationModel) (interface{}, []ovsdb.Operation, error) {
 	hasGuardOp := len(ops) > 0 && isGuardOp(&ops[0])
 	guardOp := []ovsdb.Operation{}
 	doWhenFound := func(model interface{}, opModel *operationModel) ([]ovsdb.Operation, error) {
@@ -219,6 +227,14 @@ func (m *modelClient) createOrUpdateOps(ops []ovsdb.Operation, opModels ...opera
 			hasGuardOp = len(guardOp) > 0
 		}
 		return m.create(opModel)
+	}
+	if forceCreate {
+		created, ops, err := m.buildOps(ops, doWhenNotFound, doWhenNotFound, opModels...)
+		if len(guardOp) > 0 {
+			// set the guard op as the first of the list
+			ops = append(guardOp, ops...)
+		}
+		return created, ops, err
 	}
 	created, ops, err := m.buildOps(ops, doWhenFound, doWhenNotFound, opModels...)
 	if len(guardOp) > 0 {

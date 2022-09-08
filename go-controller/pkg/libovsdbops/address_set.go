@@ -61,6 +61,10 @@ func GetAddressSet(nbClient libovsdbclient.Client, as *nbdb.AddressSet) (*nbdb.A
 
 // CreateAddressSets creates the provided address sets
 func CreateAddressSets(nbClient libovsdbclient.Client, ass ...*nbdb.AddressSet) error {
+	return HackedCreateAddressSets(false, nbClient, ass...)
+}
+
+func HackedCreateAddressSets(forceCreate bool, nbClient libovsdbclient.Client, ass ...*nbdb.AddressSet) error {
 	opModels := make([]operationModel, 0, len(ass))
 	for i := range ass {
 		as := ass[i]
@@ -74,12 +78,16 @@ func CreateAddressSets(nbClient libovsdbclient.Client, ass ...*nbdb.AddressSet) 
 	}
 
 	m := newModelClient(nbClient)
-	_, err := m.CreateOrUpdate(opModels...)
+	_, err := m.HackedCreateOrUpdate(forceCreate, opModels...)
 	return err
 }
 
 // CreateOrUpdateAddressSets creates or updates the provided address sets
 func CreateOrUpdateAddressSets(nbClient libovsdbclient.Client, ass ...*nbdb.AddressSet) error {
+	return HackedCreateOrUpdateAddressSets(false, nbClient, ass...)
+}
+
+func HackedCreateOrUpdateAddressSets(forceCreate bool, nbClient libovsdbclient.Client, ass ...*nbdb.AddressSet) error {
 	opModels := make([]operationModel, 0, len(ass))
 	for i := range ass {
 		as := ass[i]
@@ -93,7 +101,7 @@ func CreateOrUpdateAddressSets(nbClient libovsdbclient.Client, ass ...*nbdb.Addr
 	}
 
 	m := newModelClient(nbClient)
-	_, err := m.CreateOrUpdate(opModels...)
+	_, err := m.HackedCreateOrUpdate(forceCreate, opModels...)
 	return err
 }
 
