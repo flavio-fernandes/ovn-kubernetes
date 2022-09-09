@@ -295,6 +295,11 @@ func newOvnAddressSet(nbClient libovsdbclient.Client, name string, ips []net.IP,
 
 	err := libovsdbops.CreateOrUpdateAddressSets(nbClient, &addrSet)
 
+	// we can call again and again and this would normally never be a problem, bc it is handled as an update
+	if err == nil {
+		err = libovsdbops.CreateOrUpdateAddressSets(nbClient, &addrSet)
+	}
+
 	// HACK: force it to fail by using hacked call that attempts to create when it would normally update
 	if err == nil {
 		err = libovsdbops.HackedCreateOrUpdateAddressSets(true, nbClient, &addrSet)
@@ -306,7 +311,8 @@ func newOvnAddressSet(nbClient libovsdbclient.Client, name string, ips []net.IP,
 		// If error is due to a ConstraintViolation, this is likely a race
 		// described in https://bugzilla.redhat.com/show_bug.cgi?id=2108026
 		// To handle that, simply retry.
-		if !recursive && reflect.TypeOf(err).String() == reflect.TypeOf(&ovsdb.ConstraintViolation{}).String() {
+		unwrappedError := errors.Unwrap(err)
+		if !recursive && reflect.TypeOf(unwrappedError) == reflect.TypeOf(&ovsdb.ConstraintViolation{}) {
 			return newOvnAddressSet(nbClient, name, ips, true)
 		}
 		return nil, fmt.Errorf("failed to create or update address set %+v: %v", addrSet, err)
