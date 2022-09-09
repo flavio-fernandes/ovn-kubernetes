@@ -3,6 +3,7 @@ package addressset
 import (
 	"fmt"
 	"net"
+	"reflect"
 	"strings"
 
 	libovsdbclient "github.com/ovn-org/libovsdb/client"
@@ -264,13 +265,13 @@ func newOvnAddressSets(nbClient libovsdbclient.Client, name string, ips []net.IP
 
 	ip4ASName, ip6ASName := MakeAddressSetName(name)
 	if config.IPv4Mode {
-		v4set, err = newOvnAddressSet(nbClient, ip4ASName, v4IPs)
+		v4set, err = newOvnAddressSet(nbClient, ip4ASName, v4IPs, false)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if config.IPv6Mode {
-		v6set, err = newOvnAddressSet(nbClient, ip6ASName, v6IPs)
+		v6set, err = newOvnAddressSet(nbClient, ip6ASName, v6IPs, false)
 		if err != nil {
 			return nil, err
 		}
@@ -278,7 +279,7 @@ func newOvnAddressSets(nbClient libovsdbclient.Client, name string, ips []net.IP
 	return &ovnAddressSets{nbClient: nbClient, name: name, ipv4: v4set, ipv6: v6set}, nil
 }
 
-func newOvnAddressSet(nbClient libovsdbclient.Client, name string, ips []net.IP) (*ovnAddressSet, error) {
+func newOvnAddressSet(nbClient libovsdbclient.Client, name string, ips []net.IP, inRecursion bool) (*ovnAddressSet, error) {
 	as := &ovnAddressSet{
 		nbClient: nbClient,
 		name:     name,
@@ -295,6 +296,13 @@ func newOvnAddressSet(nbClient libovsdbclient.Client, name string, ips []net.IP)
 	err := libovsdbops.CreateOrUpdateAddressSets(nbClient, &addrSet)
 	// UUID should always be set if no error, check anyway
 	if err != nil || addrSet.UUID == "" {
+		// If error is due to a ConstraintViolation, this is likely a race
+		// described in https://bugzilla.redhat.com/show_bug.cgi?id=2108026
+		// To handle that, simply retry.
+		unwrappedError := errors.Unwrap(err)
+		if !inRecursion && reflect.TypeOf(unwrappedError) == reflect.TypeOf(&ovsdb.ConstraintViolation{}) {
+			return newOvnAddressSet(nbClient, name, ips, true)
+		}
 		return nil, fmt.Errorf("failed to create or update address set %+v: %v", addrSet, err)
 	}
 
