@@ -50,6 +50,10 @@ func TransactAndCheck(c client.Client, ops []ovsdb.Operation) ([]ovsdb.Operation
 
 	opErrors, err := ovsdb.CheckOperationResults(results, ops)
 	if err != nil {
+		// If there is only one error, keep it 'as is', inside a message wrap
+		if len(opErrors) == 1 {
+			return nil, fmt.Errorf("error in transact with ops %+v results %+v and errors %w: %v", ops, results, opErrors[0], err)
+		}
 		return nil, fmt.Errorf("error in transact with ops %+v results %+v and errors %+v: %v", ops, results, opErrors, err)
 	}
 
