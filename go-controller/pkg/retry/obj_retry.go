@@ -364,6 +364,10 @@ func (r *RetryFramework) iterateRetryResources() {
 // RetryObjInterval seconds or when requested through retryChan.
 func (r *RetryFramework) periodicallyRetryResources() {
 	timer := time.NewTicker(RetryObjInterval)
+	waitCh := make(chan struct{})
+	go func() {
+		r.watchFactory.WaitForWatchFactoryStopChannel(waitCh)
+	}()
 	defer timer.Stop()
 	for {
 		select {
@@ -375,7 +379,7 @@ func (r *RetryFramework) periodicallyRetryResources() {
 			r.iterateRetryResources()
 			timer.Reset(RetryObjInterval)
 
-		case <-r.StopChan:
+		case <-waitCh:
 			klog.V(5).Infof("Stop channel got triggered: will stop retrying failed objects of type %s", r.ResourceHandler.ObjType)
 			return
 		}

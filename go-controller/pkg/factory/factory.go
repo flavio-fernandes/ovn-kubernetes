@@ -346,6 +346,11 @@ func NewNodeWatchFactory(ovnClientset *util.OVNClientset, nodeName string) (*Wat
 	return wf, nil
 }
 
+func (wf *WatchFactory) WaitForWatchFactoryStopChannel(stopChan chan struct{}) {
+	<-wf.stopChan
+	close(stopChan)
+}
+
 func (wf *WatchFactory) Shutdown() {
 	close(wf.stopChan)
 
