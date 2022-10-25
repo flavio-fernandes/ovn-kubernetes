@@ -76,7 +76,6 @@ type RetryFramework struct {
 	retryChan chan struct{}
 
 	watchFactory    *factory.WatchFactory
-	StopChan        <-chan struct{}
 	ResourceHandler *ResourceHandler
 }
 
@@ -93,7 +92,6 @@ func NewRetryFramework(
 		retryEntries:    syncmap.NewSyncMap[*retryObjEntry](),
 		retryChan:       make(chan struct{}, 1),
 		watchFactory:    watchFactory,
-		StopChan:        stopChan,
 		ResourceHandler: resourceHandler,
 	}
 }
@@ -363,6 +361,8 @@ func (r *RetryFramework) iterateRetryResources() {
 // periodicallyRetryResources tracks RetryFramework and checks if any object needs to be retried for add or delete every
 // RetryObjInterval seconds or when requested through retryChan.
 func (r *RetryFramework) periodicallyRetryResources() {
+	r.watchFactory.Wg.Add(1)
+	defer r.watchFactory.Wg.Done()
 	timer := time.NewTicker(RetryObjInterval)
 	waitCh := make(chan struct{})
 	go func() {
