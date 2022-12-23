@@ -443,7 +443,7 @@ func (oc *SecondaryLayer3NetworkController) addNode(node *kapi.Node) ([]*net.IPN
 		return nil, err
 	}
 
-	err = oc.createNodeLogicalSwitch(node.Name, hostSubnets, "")
+	err = oc.createNodeLogicalSwitch(node.Name, hostSubnets, "", "")
 	if err != nil {
 		return nil, err
 	}

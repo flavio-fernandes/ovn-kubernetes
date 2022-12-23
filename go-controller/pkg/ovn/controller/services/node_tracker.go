@@ -8,6 +8,7 @@ import (
 
 	globalconfig "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/factory"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/libovsdbops"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/types"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
 
@@ -29,6 +30,10 @@ type nodeTracker struct {
 
 	// resyncFn is the function to call so that all service are resynced
 	resyncFn func()
+
+	// Template variables expanding to each chassis' node IP (v4 and v6).
+	nodeIPV4Template *libovsdbops.Template
+	nodeIPV6Template *libovsdbops.Template
 }
 
 type nodeInfo struct {
@@ -71,7 +76,9 @@ func (ni *nodeInfo) nodeSubnets() []net.IPNet {
 
 func newNodeTracker(nodeInformer coreinformers.NodeInformer) *nodeTracker {
 	nt := &nodeTracker{
-		nodes: map[string]nodeInfo{},
+		nodes:            map[string]nodeInfo{},
+		nodeIPV4Template: libovsdbops.MakeTemplate(MakeLBNodeIPTemplateName(v1.IPv4Protocol)),
+		nodeIPV6Template: libovsdbops.MakeTemplate(MakeLBNodeIPTemplateName(v1.IPv6Protocol)),
 	}
 
 	nodeInformer.Informer().AddEventHandler(factory.WithUpdateHandlingForObjReplace(cache.ResourceEventHandlerFuncs{
@@ -154,6 +161,14 @@ func (nt *nodeTracker) updateNodeInfo(nodeName, switchName, routerName, chassisI
 	}
 
 	nt.nodes[nodeName] = ni
+	if chassisID != "" {
+		if ipv4, err := util.MatchFirstIPFamily(false, nodeIPs); err == nil {
+			nt.nodeIPV4Template.Value[chassisID] = ipv4.String()
+		}
+		if ipv6, err := util.MatchFirstIPFamily(true, nodeIPs); err == nil {
+			nt.nodeIPV6Template.Value[chassisID] = ipv6.String()
+		}
+	}
 	nt.Unlock()
 
 	klog.Infof("Node %s switch + router changed, syncing services", nodeName)
@@ -175,6 +190,10 @@ func (nt *nodeTracker) removeNode(nodeName string) {
 	nt.Lock()
 	defer nt.Unlock()
 
+	if node, found := nt.nodes[nodeName]; found {
+		delete(nt.nodeIPV4Template.Value, node.chassisID)
+		delete(nt.nodeIPV6Template.Value, node.chassisID)
+	}
 	delete(nt.nodes, nodeName)
 }
 

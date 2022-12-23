@@ -658,7 +658,9 @@ var _ = ginkgo.Describe("OVN EgressFirewall Operations", func() {
 					}
 					expectedClusterRouterPortGroup := newRouterPortGroup()
 					expectedClusterPortGroup := newClusterPortGroup()
-					expectedClusterLBGroup := newLoadBalancerGroup()
+					expectedClusterLBGroup := newLoadBalancerGroup(t.ClusterLBGroupName)
+					expectedSwitchLBGroup := newLoadBalancerGroup(t.ClusterSwitchLBGroupName)
+					expectedRouterLBGroup := newLoadBalancerGroup(t.ClusterRouterLBGroupName)
 					joinSwitch := newClusterJoinSwitch()
 
 					initialTestData := []libovsdbtest.TestData{
@@ -668,6 +670,8 @@ var _ = ginkgo.Describe("OVN EgressFirewall Operations", func() {
 						expectedClusterRouterPortGroup,
 						expectedClusterPortGroup,
 						expectedClusterLBGroup,
+						expectedSwitchLBGroup,
+						expectedRouterLBGroup,
 					}
 					gr := t.GWRouterPrefix + node1.Name
 					datapath := &sbdb.DatapathBinding{
@@ -731,7 +735,7 @@ var _ = ginkgo.Describe("OVN EgressFirewall Operations", func() {
 					expectedNodeSwitch.OtherConfig = map[string]string{"subnet": node1.NodeSubnet}
 
 					// Add cluster LB Group to node switch.
-					expectedNodeSwitch.LoadBalancerGroup = []string{expectedClusterLBGroup.UUID}
+					expectedNodeSwitch.LoadBalancerGroup = []string{expectedClusterLBGroup.UUID, expectedSwitchLBGroup.UUID}
 
 					expectedDatabaseState := []libovsdb.TestData{}
 					expectedDatabaseState = addNodeLogicalFlows(expectedDatabaseState, expectedOVNClusterRouter, expectedNodeSwitch, expectedClusterRouterPortGroup, expectedClusterPortGroup, &node1)

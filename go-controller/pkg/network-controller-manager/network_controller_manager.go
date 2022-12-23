@@ -58,6 +58,8 @@ type networkControllerManager struct {
 	SCTPSupport bool
 	// Supports multicast?
 	multicastSupport bool
+	// Supports chassis template variables?
+	templateSupport bool
 
 	stopChan chan struct{}
 	wg       *sync.WaitGroup
@@ -307,6 +309,7 @@ func (cm *networkControllerManager) Init() error {
 	}
 
 	cm.configureMulticastSupport()
+	cm.configureTemplateSupport()
 
 	err = cm.enableOVNLogicalDataPathGroups()
 	if err != nil {
@@ -343,6 +346,16 @@ func (cm *networkControllerManager) configureMulticastSupport() {
 	}
 }
 
+func (cm *networkControllerManager) configureTemplateSupport() {
+	if _, _, err := util.RunOVNNbctl("--columns=_uuid", "list", "Chassis_Template_Var"); err != nil {
+		klog.Warningf("Version of OVN in use does not support Chassis_Template_Var. " +
+			"Disabling Templates Support")
+		cm.templateSupport = false
+	} else {
+		cm.templateSupport = true
+	}
+}
+
 // enableOVNLogicalDataPathGroups sets an OVN flag to enable logical datapath
 // groups on OVN 20.12 and later. The option is ignored if OVN doesn't
 // understand it. Logical datapath groups reduce the size of the southbound
@@ -368,7 +381,7 @@ func (cm *networkControllerManager) configureMetrics(stopChan <-chan struct{}) {
 // newCommonNetworkControllerInfo creates and returns the common networkController info
 func (cm *networkControllerManager) newCommonNetworkControllerInfo() *ovn.CommonNetworkControllerInfo {
 	return ovn.NewCommonNetworkControllerInfo(cm.client, cm.kube, cm.watchFactory, cm.recorder, cm.nbClient,
-		cm.sbClient, cm.podRecorder, cm.SCTPSupport, cm.multicastSupport)
+		cm.sbClient, cm.podRecorder, cm.SCTPSupport, cm.multicastSupport, cm.templateSupport)
 }
 
 // NewDefaultNetworkController creates the controller for default network

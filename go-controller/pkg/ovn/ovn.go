@@ -433,7 +433,7 @@ func (oc *DefaultNetworkController) StartServiceController(wg *sync.WaitGroup, r
 		useLBGroups := oc.loadBalancerGroupUUID != ""
 		// use 5 workers like most of the kubernetes controllers in the
 		// kubernetes controller-manager
-		err := oc.svcController.Run(5, oc.stopChan, runRepair, useLBGroups)
+		err := oc.svcController.Run(5, oc.stopChan, runRepair, useLBGroups, oc.templateSupport)
 		if err != nil {
 			klog.Errorf("Error running OVN Kubernetes Services controller: %v", err)
 		}

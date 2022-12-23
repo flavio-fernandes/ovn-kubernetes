@@ -366,7 +366,7 @@ func (oc *DefaultNetworkController) ensureNodeLogicalNetwork(node *kapi.Node, ho
 		return err
 	}
 
-	return oc.createNodeLogicalSwitch(node.Name, hostSubnets, oc.loadBalancerGroupUUID)
+	return oc.createNodeLogicalSwitch(node.Name, hostSubnets, oc.loadBalancerGroupUUID, oc.switchLoadBalancerGroupUUID)
 }
 
 func (oc *DefaultNetworkController) addNode(node *kapi.Node) ([]*net.IPNet, error) {
@@ -452,6 +452,13 @@ func (oc *DefaultNetworkController) deleteStaleNodeChassis(node *kapi.Node) erro
 				"Node %s is now with a new chassis ID. Its stale chassis entry is still in the SBDB",
 				node.Name)
 			return fmt.Errorf("node %s is now with a new chassis ID. Its stale chassis entry is still in the SBDB", node.Name)
+		}
+		if err = libovsdbops.DeleteChassisTemplateRecord(oc.nbClient, []string{staleChassis}...); err != nil {
+			// Send an event and Log on failure
+			oc.recorder.Eventf(node, kapi.EventTypeWarning, "ErrorMismatchChassis",
+				"Node %s is now with a new chassis ID. Its stale chassis template vars are still in the NBDB",
+				node.Name)
+			return fmt.Errorf("node %s is now with a new chassis ID. Its stale chassis template vars are still in the NBDB", node.Name)
 		}
 	}
 	return nil
@@ -561,13 +568,20 @@ func (oc *DefaultNetworkController) syncNodesPeriodic() {
 		delete(chassisHostNameMap, nodeName)
 	}
 
-	staleChassis := []*sbdb.Chassis{}
-	for _, v := range chassisHostNameMap {
-		staleChassis = append(staleChassis, v)
+	staleChassis := make([]*sbdb.Chassis, 0, len(chassisHostNameMap))
+	staleChassisIds := make([]string, 0, len(chassisHostNameMap))
+	for _, chassis := range chassisHostNameMap {
+		staleChassis = append(staleChassis, chassis)
+		staleChassisIds = append(staleChassisIds, chassis.Name)
 	}
 
 	if err = libovsdbops.DeleteChassis(oc.sbClient, staleChassis...); err != nil {
 		klog.Errorf("Failed Deleting chassis %v error: %v", chassisHostNameMap, err)
+		return
+	}
+
+	if err = libovsdbops.DeleteChassisTemplateRecord(oc.nbClient, staleChassisIds...); err != nil {
+		klog.Errorf("Failed Deleting chassis template vars %v error: %v", chassisHostNameMap, err)
 		return
 	}
 }
@@ -629,6 +643,7 @@ func (oc *DefaultNetworkController) syncNodes(nodes []interface{}) error {
 
 	knownChassisNames := sets.NewString()
 	chassisDeleteList := []*sbdb.Chassis{}
+	chassisIdDeleteList := []string{}
 	for _, chassis := range chassisList {
 		knownChassisNames.Insert(chassis.Name)
 		// skip chassis that have a corresponding node
@@ -653,11 +668,15 @@ func (oc *DefaultNetworkController) syncNodes(nodes []interface{}) error {
 		// the Chassis does not exist in SBDB, DeleteChassis will remove the
 		// ChassisPrivate.
 		chassisDeleteList = append(chassisDeleteList, &sbdb.Chassis{Name: chassis.Name})
+		chassisIdDeleteList = append(chassisIdDeleteList, chassis.Name)
 	}
 
 	// Delete stale chassis and associated chassis private
 	if err := libovsdbops.DeleteChassis(oc.sbClient, chassisDeleteList...); err != nil {
 		return fmt.Errorf("failed deleting chassis %v: %v", chassisDeleteList, err)
+	}
+	if err = libovsdbops.DeleteChassisTemplateRecord(oc.nbClient, chassisIdDeleteList...); err != nil {
+		return fmt.Errorf("failed deleting chassis template variables for %v: %v", chassisDeleteList, err)
 	}
 	return nil
 }
@@ -812,6 +831,16 @@ func (oc *DefaultNetworkController) deleteNodeEvent(node *kapi.Node) error {
 	if err := oc.deleteNode(node.Name); err != nil {
 		return err
 	}
+
+	chassisID, err := util.ParseNodeChassisIDAnnotation(node)
+	if err != nil {
+		return err
+	}
+
+	if err = libovsdbops.DeleteChassisTemplateRecord(oc.nbClient, []string{chassisID}...); err != nil {
+		return fmt.Errorf("failed deleting chassis template variables for %s: %v", node.Name, err)
+	}
+
 	oc.lsManager.DeleteSwitch(node.Name)
 	oc.addNodeFailed.Delete(node.Name)
 	oc.mgmtPortFailed.Delete(node.Name)

@@ -2,12 +2,14 @@ package libovsdbops
 
 import (
 	"context"
+
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/types"
 
 	libovsdbclient "github.com/ovn-org/libovsdb/client"
 	libovsdb "github.com/ovn-org/libovsdb/ovsdb"
 
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/nbdb"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // getNonZeroLoadBalancerMutableFields builds a list of load balancer
@@ -55,6 +57,33 @@ func BuildLoadBalancer(name string, protocol nbdb.LoadBalancerProtocol, vips, op
 		Options:     options,
 		ExternalIDs: externalIds,
 	}
+}
+
+// GetVips returns the set of VIPs used by the load balancer.
+func GetVips(lb *nbdb.LoadBalancer) sets.String {
+	result := sets.String{}
+	for vip := range lb.Vips {
+		result.Insert(vip)
+	}
+	return result
+}
+
+// GetTemplates returns the TemplateMap of templates referenced by the load
+// balancer.  These are pointers to Templates already read from the database
+// which are stored in 'allTemplates'.
+func GetTemplates(lb *nbdb.LoadBalancer, allTemplates TemplateMap) TemplateMap {
+	result := TemplateMap{}
+	for vip, backend := range lb.Vips {
+		for _, s := range []string{vip, backend} {
+			if IsTemplateReference(s) {
+				templateName := TemplateNameFromReference(s)
+				if template, found := allTemplates[templateName]; found {
+					result[template.Name] = template
+				}
+			}
+		}
+	}
+	return result
 }
 
 // CreateLoadBalancersOps creates the provided load balancers returning the

@@ -59,6 +59,9 @@ type CommonNetworkControllerInfo struct {
 
 	// Supports multicast?
 	multicastSupport bool
+
+	// Supports chassis template vars?
+	templateSupport bool
 }
 
 // BaseNetworkController structure holds per-network fields and network specific configuration
@@ -119,7 +122,7 @@ type BaseSecondaryNetworkController struct {
 // NewCommonNetworkControllerInfo creates CommonNetworkControllerInfo shared by controllers
 func NewCommonNetworkControllerInfo(client clientset.Interface, kube *kube.KubeOVN, wf *factory.WatchFactory,
 	recorder record.EventRecorder, nbClient libovsdbclient.Client, sbClient libovsdbclient.Client,
-	podRecorder *metrics.PodRecorder, SCTPSupport, multicastSupport bool) *CommonNetworkControllerInfo {
+	podRecorder *metrics.PodRecorder, SCTPSupport, multicastSupport, templateSupport bool) *CommonNetworkControllerInfo {
 	return &CommonNetworkControllerInfo{
 		client:           client,
 		kube:             kube,
@@ -130,6 +133,7 @@ func NewCommonNetworkControllerInfo(client clientset.Interface, kube *kube.KubeO
 		podRecorder:      podRecorder,
 		SCTPSupport:      SCTPSupport,
 		multicastSupport: multicastSupport,
+		templateSupport:  templateSupport,
 	}
 }
 
@@ -255,7 +259,7 @@ func (bnc *BaseNetworkController) syncNodeClusterRouterPort(node *kapi.Node, hos
 }
 
 func (bnc *BaseNetworkController) createNodeLogicalSwitch(nodeName string, hostSubnets []*net.IPNet,
-	loadBalancerGroupUUID string) error {
+	loadBalancerGroupUUID, switchLoadBalancerGroupUUID string) error {
 	// logical router port MAC is based on IPv4 subnet if there is one, else IPv6
 	var nodeLRPMAC net.HardwareAddr
 	switchName := bnc.GetNetworkScopedName(nodeName)
@@ -301,7 +305,7 @@ func (bnc *BaseNetworkController) createNodeLogicalSwitch(nodeName string, hostS
 	}
 
 	if loadBalancerGroupUUID != "" {
-		logicalSwitch.LoadBalancerGroup = []string{loadBalancerGroupUUID}
+		logicalSwitch.LoadBalancerGroup = []string{loadBalancerGroupUUID, switchLoadBalancerGroupUUID}
 	}
 
 	// If supported, enable IGMP/MLD snooping and querier on the node.
