@@ -26,6 +26,7 @@ type NAT struct {
 	ExternalIP        string            `ovsdb:"external_ip"`
 	ExternalMAC       *string           `ovsdb:"external_mac"`
 	ExternalPortRange string            `ovsdb:"external_port_range"`
+	GatewayPort       *string           `ovsdb:"gateway_port"`
 	LogicalIP         string            `ovsdb:"logical_ip"`
 	LogicalPort       *string           `ovsdb:"logical_port"`
 	Options           map[string]string `ovsdb:"options"`
@@ -148,6 +149,24 @@ func (a *NAT) GetLogicalPort() *string {
 	return a.LogicalPort
 }
 
+func copyNATGatewayPort(a *string) *string {
+	if a == nil {
+		return nil
+	}
+	b := *a
+	return &b
+}
+
+func equalNATGatewayPort(a, b *string) bool {
+	if (a == nil) != (b == nil) {
+		return false
+	}
+	if a == b {
+		return true
+	}
+	return *a == *b
+}
+
 func copyNATLogicalPort(a *string) *string {
 	if a == nil {
 		return nil
@@ -206,6 +225,7 @@ func (a *NAT) DeepCopyInto(b *NAT) {
 	b.ExemptedExtIPs = copyNATExemptedExtIPs(a.ExemptedExtIPs)
 	b.ExternalIDs = copyNATExternalIDs(a.ExternalIDs)
 	b.ExternalMAC = copyNATExternalMAC(a.ExternalMAC)
+	b.GatewayPort = copyNATGatewayPort(a.GatewayPort)
 	b.LogicalPort = copyNATLogicalPort(a.LogicalPort)
 	b.Options = copyNATOptions(a.Options)
 }
@@ -233,6 +253,7 @@ func (a *NAT) Equals(b *NAT) bool {
 		a.ExternalIP == b.ExternalIP &&
 		equalNATExternalMAC(a.ExternalMAC, b.ExternalMAC) &&
 		a.ExternalPortRange == b.ExternalPortRange &&
+		equalNATGatewayPort(a.GatewayPort, b.GatewayPort) &&
 		a.LogicalIP == b.LogicalIP &&
 		equalNATLogicalPort(a.LogicalPort, b.LogicalPort) &&
 		equalNATOptions(a.Options, b.Options) &&
