@@ -42,6 +42,8 @@ type nodeInfo struct {
 	gatewayRouterName string
 	// The name of the node's switch - never empty
 	switchName string
+	// The chassisID of the node (ovs.external-ids:system-id)
+	chassisID string
 }
 
 // returns a list of all ip blocks "assigned" to this node
@@ -124,13 +126,14 @@ func newNodeTracker(nodeInformer coreinformers.NodeInformer) *nodeTracker {
 
 // updateNodeInfo updates the node info cache, and syncs all services
 // if it changed.
-func (nt *nodeTracker) updateNodeInfo(nodeName, switchName, routerName string, nodeIPs []string, podSubnets []*net.IPNet) {
+func (nt *nodeTracker) updateNodeInfo(nodeName, switchName, routerName, chassisID string, nodeIPs []string, podSubnets []*net.IPNet) {
 	ni := nodeInfo{
 		name:              nodeName,
 		nodeIPs:           nodeIPs,
 		podSubnets:        make([]net.IPNet, 0, len(podSubnets)),
 		gatewayRouterName: routerName,
 		switchName:        switchName,
+		chassisID:         chassisID,
 	}
 	for i := range podSubnets {
 		ni.podSubnets = append(ni.podSubnets, *podSubnets[i]) // de-pointer
@@ -185,6 +188,7 @@ func (nt *nodeTracker) updateNode(node *v1.Node) {
 	switchName := node.Name
 	grName := ""
 	ips := []string{}
+	chassisID := ""
 
 	// if the node has a gateway config, it will soon have a gateway router
 	// so, set the router name
@@ -200,10 +204,16 @@ func (nt *nodeTracker) updateNode(node *v1.Node) {
 		}
 	}
 
+	chassisID, err = util.ParseNodeChassisIDAnnotation(node)
+	if err != nil {
+		klog.Infof("Node %s has invalid / no ChassisID annotation (probably waiting on initialization): %v", node.Name, err)
+	}
+
 	nt.updateNodeInfo(
 		node.Name,
 		switchName,
 		grName,
+		chassisID,
 		ips,
 		hsn,
 	)
