@@ -75,3 +75,18 @@ func (idAllocator *IdAllocator) ReleaseId(name string) {
 		idAllocator.idBitmap.Release(v.(int))
 	}
 }
+
+// GetId returns the allocated id for the resource 'name' if allocated earlier.
+// If the id for the resource is already allocated, it returns the cached id.
+func (idAllocator *IdAllocator) GetId(name string) (int, bool) {
+	idAllocator.Lock()
+	defer idAllocator.Unlock()
+
+	// Check the idMap and return the id if its already allocated
+	v, ok := idAllocator.nameIdMap.Load(name)
+	if ok {
+		return v.(int), true
+	}
+
+	return -1, false
+}

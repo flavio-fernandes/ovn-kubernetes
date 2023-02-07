@@ -3,6 +3,7 @@ package clustermanager
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"net"
 	"reflect"
 	"sync"
@@ -47,6 +48,12 @@ type zoneClusterController struct {
 
 	// Join switch subnet allocator for each zone (only for the default network)
 	zoneJoinSubnetAllocator *subnetallocator.ZoneSubnetAllocator
+
+	transitSwitchv4Cidr   *net.IPNet
+	transitSwitchBasev4Ip *big.Int
+
+	transitSwitchv6Cidr   *net.IPNet
+	transitSwitchBasev6Ip *big.Int
 }
 
 func newZoneClusterController(ovnClient *util.OVNClusterManagerClientset, wf *factory.WatchFactory) *zoneClusterController {
@@ -57,6 +64,19 @@ func newZoneClusterController(ovnClient *util.OVNClusterManagerClientset, wf *fa
 
 	wg := &sync.WaitGroup{}
 
+	var transitSwitchv4Cidr *net.IPNet
+	var transitSwitchBasev4Ip *big.Int
+	var transitSwitchv6Cidr *net.IPNet
+	var transitSwitchBasev6Ip *big.Int
+
+	if config.OVNKubernetesFeature.EnableInterconnect {
+		_, transitSwitchv4Cidr, _ = net.ParseCIDR(config.ClusterManager.V4TransitSwitchSubnet)
+		_, transitSwitchv6Cidr, _ = net.ParseCIDR(config.ClusterManager.V6TransitSwitchSubnet)
+
+		transitSwitchBasev4Ip = utilnet.BigForIP(transitSwitchv4Cidr.IP)
+		transitSwitchBasev6Ip = utilnet.BigForIP(transitSwitchv6Cidr.IP)
+	}
+
 	zcc := &zoneClusterController{
 		kube:                    kube,
 		watchFactory:            wf,
@@ -64,6 +84,10 @@ func newZoneClusterController(ovnClient *util.OVNClusterManagerClientset, wf *fa
 		wg:                      wg,
 		idAllocator:             NewIdAlloctar("NodeIds", maxNodeIds),
 		zoneJoinSubnetAllocator: subnetallocator.NewZoneSubnetAllocator(),
+		transitSwitchv4Cidr:     transitSwitchv4Cidr,
+		transitSwitchBasev4Ip:   transitSwitchBasev4Ip,
+		transitSwitchv6Cidr:     transitSwitchv6Cidr,
+		transitSwitchBasev6Ip:   transitSwitchBasev6Ip,
 	}
 
 	zcc.initRetryFramework()
@@ -122,6 +146,18 @@ func (zcc *zoneClusterController) handleAddUpdateNodeEvent(node *corev1.Node) er
 		return err
 	}
 
+	if config.OVNKubernetesFeature.EnableInterconnect {
+		nodeId, found := zcc.idAllocator.GetId(node.Name)
+		if !found {
+			// This cannot happen. Return error
+			return fmt.Errorf("node id allocator failed in allocating id for the node %s", node.Name)
+		}
+
+		// Generate v4 and v6 transit switch port IPs for the node.
+		if err := zcc.syncNodeTransitSwitchPortIps(node, nodeId); err != nil {
+			return err
+		}
+	}
 	return zcc.syncZoneJoinSubnet(node)
 }
 
@@ -147,7 +183,7 @@ func (zcc *zoneClusterController) syncNodeId(node *corev1.Node) error {
 	}
 
 	klog.V(5).Infof("Allocated id [%d] for node %q", allocatedNodeId, node.Name)
-	return zcc.updateNodeAnnotationWithRetry(node.Name, allocatedNodeId)
+	return zcc.updateNodeIdAnnotationWithRetry(node.Name, allocatedNodeId)
 }
 
 func (zcc *zoneClusterController) syncNodeIds(nodes []interface{}) error {
@@ -213,6 +249,27 @@ func (zcc *zoneClusterController) isNodeJoinSubnetAnnotationOutOfSync(node *core
 	return !zcc.areIPNetsEqual(zoneJoinSubnets, nodeZoneJoinSubnets)
 }
 
+func (zcc *zoneClusterController) syncNodeTransitSwitchPortIps(node *corev1.Node, nodeId int) error {
+	var transitSwitchPortIps []*net.IPNet
+
+	parsedTransitSwitchPortIps, _ := util.ParseNodeTransitSwitchPortAddresses(node)
+	if config.IPv4Mode {
+		nodeTransitSwitchPortv4Ip := utilnet.AddIPOffset(zcc.transitSwitchBasev4Ip, nodeId)
+		transitSwitchPortIps = append(transitSwitchPortIps, &net.IPNet{IP: nodeTransitSwitchPortv4Ip, Mask: zcc.transitSwitchv4Cidr.Mask})
+	}
+
+	if config.IPv6Mode {
+		nodeTransitSwitchPortv6Ip := utilnet.AddIPOffset(zcc.transitSwitchBasev6Ip, nodeId)
+		transitSwitchPortIps = append(transitSwitchPortIps, &net.IPNet{IP: nodeTransitSwitchPortv6Ip, Mask: zcc.transitSwitchv6Cidr.Mask})
+	}
+
+	if zcc.areIPNetsEqual(parsedTransitSwitchPortIps, transitSwitchPortIps) {
+		return nil
+	}
+
+	return zcc.updateNodeTransitSwitchPortAddressesAnnotationWithRetry(node.Name, transitSwitchPortIps)
+}
+
 func (zcc *zoneClusterController) areIPNetsEqual(ipNet1 []*net.IPNet, ipNet2 []*net.IPNet) bool {
 	if ipNet1 == nil || ipNet2 == nil {
 		return false
@@ -264,7 +321,7 @@ func (zcc *zoneClusterController) areIPNetsEqual(ipNet1 []*net.IPNet, ipNet2 []*
 	return true
 }
 
-func (zcc *zoneClusterController) updateNodeAnnotationWithRetry(nodeName string, nodeId int) error {
+func (zcc *zoneClusterController) updateNodeIdAnnotationWithRetry(nodeName string, nodeId int) error {
 	// Retry if it fails because of potential conflict which is transient. Return error in the
 	// case of other errors (say temporary API server down), and it will be taken care of by the
 	// retry mechanism.
@@ -310,6 +367,32 @@ func (zcc *zoneClusterController) updateZoneSubnetAnnotationWithRetry(nodeName s
 	if resultErr != nil {
 		return fmt.Errorf("failed to update node %s annotation", nodeName)
 	}
+	return nil
+}
+
+func (zcc *zoneClusterController) updateNodeTransitSwitchPortAddressesAnnotationWithRetry(nodeName string, nodeTransitSwitchPortIps []*net.IPNet) error {
+	// Retry if it fails because of potential conflict which is transient. Return error in the
+	// case of other errors (say temporary API server down), and it will be taken care of by the
+	// retry mechanism.
+	resultErr := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		// Informer cache should not be mutated, so get a copy of the object
+		node, err := zcc.watchFactory.GetNode(nodeName)
+		if err != nil {
+			return err
+		}
+
+		cnode := node.DeepCopy()
+		cnode.Annotations, err = util.UpdateNodeTransitSwitchPortAddressesAnnotation(cnode.Annotations, nodeTransitSwitchPortIps)
+		if err != nil {
+			return fmt.Errorf("failed to update node %q annotation transit port ips %s",
+				node.Name, util.JoinIPNets(nodeTransitSwitchPortIps, ","))
+		}
+		return zcc.kube.UpdateNode(cnode)
+	})
+	if resultErr != nil {
+		return fmt.Errorf("failed to update node %s annotation", nodeName)
+	}
+
 	return nil
 }
 
