@@ -35,7 +35,9 @@ type nodeInfo struct {
 	// the node's Name
 	name string
 	// The list of physical IPs the node has, as reported by the gatewayconf annotation
-	nodeIPs []string
+	nodeIPs []net.IP
+	// The physical IPs string representation (to avoid .String() every time)
+	nodeIPsStr []string
 	// The pod network subnet(s)
 	podSubnets []net.IPNet
 	// the name of the node's GatewayRouter, or "" of non-existent
@@ -50,8 +52,7 @@ type nodeInfo struct {
 // includes node IPs, still as a mask-1 net
 func (ni *nodeInfo) nodeSubnets() []net.IPNet {
 	out := append([]net.IPNet{}, ni.podSubnets...)
-	for _, ipStr := range ni.nodeIPs {
-		ip := net.ParseIP(ipStr)
+	for _, ip := range ni.nodeIPs {
 		if ipv4 := ip.To4(); ipv4 != nil {
 			out = append(out, net.IPNet{
 				IP:   ip,
@@ -126,10 +127,15 @@ func newNodeTracker(nodeInformer coreinformers.NodeInformer) *nodeTracker {
 
 // updateNodeInfo updates the node info cache, and syncs all services
 // if it changed.
-func (nt *nodeTracker) updateNodeInfo(nodeName, switchName, routerName, chassisID string, nodeIPs []string, podSubnets []*net.IPNet) {
+func (nt *nodeTracker) updateNodeInfo(nodeName, switchName, routerName, chassisID string, nodeIPs []net.IP, podSubnets []*net.IPNet) {
+	nodeIPsStr := make([]string, 0, len(nodeIPs))
+	for _, nodeIP := range nodeIPs {
+		nodeIPsStr = append(nodeIPsStr, nodeIP.String())
+	}
 	ni := nodeInfo{
 		name:              nodeName,
 		nodeIPs:           nodeIPs,
+		nodeIPsStr:        nodeIPsStr,
 		podSubnets:        make([]net.IPNet, 0, len(podSubnets)),
 		gatewayRouterName: routerName,
 		switchName:        switchName,
@@ -187,7 +193,7 @@ func (nt *nodeTracker) updateNode(node *v1.Node) {
 
 	switchName := node.Name
 	grName := ""
-	ips := []string{}
+	ips := []net.IP{}
 	chassisID := ""
 
 	// if the node has a gateway config, it will soon have a gateway router
@@ -199,7 +205,7 @@ func (nt *nodeTracker) updateNode(node *v1.Node) {
 		grName = util.GetGatewayRouterFromNode(node.Name)
 		if gwConf.NodePortEnable {
 			for _, ip := range gwConf.IPAddresses {
-				ips = append(ips, ip.IP.String())
+				ips = append(ips, ip.IP)
 			}
 		}
 	}
