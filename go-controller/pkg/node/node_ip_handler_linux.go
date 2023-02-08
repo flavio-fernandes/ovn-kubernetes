@@ -63,12 +63,12 @@ func newAddressManagerInternal(nodeName string, k kube.Interface, config *manage
 
 // updates the address manager with a new IP
 // returns true if there was an update
-func (c *addressManager) addAddr(ip net.IP) bool {
+func (c *addressManager) addAddr(ipnet net.IPNet) bool {
 	c.Lock()
 	defer c.Unlock()
-	if !c.addresses.Has(ip.String()) && c.isValidNodeIP(ip) {
-		klog.Infof("Adding IP: %s, to node IP manager", ip)
-		c.addresses.Insert(ip.String())
+	if !c.addresses.Has(ipnet.String()) && c.isValidNodeIP(ipnet.IP) {
+		klog.Infof("Adding IP: %s, to node IP manager", ipnet)
+		c.addresses.Insert(ipnet.String())
 		return true
 	}
 
@@ -77,12 +77,12 @@ func (c *addressManager) addAddr(ip net.IP) bool {
 
 // removes IP from address manager
 // returns true if there was an update
-func (c *addressManager) delAddr(ip net.IP) bool {
+func (c *addressManager) delAddr(ipnet net.IPNet) bool {
 	c.Lock()
 	defer c.Unlock()
-	if c.addresses.Has(ip.String()) && c.isValidNodeIP(ip) {
-		klog.Infof("Removing IP: %s, from node IP manager", ip)
-		c.addresses.Delete(ip.String())
+	if c.addresses.Has(ipnet.String()) && c.isValidNodeIP(ipnet.IP) {
+		klog.Infof("Removing IP: %s, from node IP manager", ipnet)
+		c.addresses.Delete(ipnet.String())
 		return true
 	}
 
@@ -96,8 +96,9 @@ func (c *addressManager) ListAddresses() []net.IP {
 	addrs := c.addresses.List()
 	out := make([]net.IP, 0, len(addrs))
 	for _, addr := range addrs {
-		ip := net.ParseIP(addr)
-		if ip == nil {
+		ip, _, err := net.ParseCIDR(addr)
+		if err != nil {
+			klog.Errorf("Failed to parse %s: %v", addr, err)
 			continue
 		}
 		out = append(out, ip)
@@ -165,9 +166,9 @@ func (c *addressManager) runInternal(stopChan <-chan struct{}, doneWg *sync.Wait
 				}
 				addrChanged := false
 				if a.NewAddr {
-					addrChanged = c.addAddr(a.LinkAddress.IP)
+					addrChanged = c.addAddr(a.LinkAddress)
 				} else {
-					addrChanged = c.delAddr(a.LinkAddress.IP)
+					addrChanged = c.delAddr(a.LinkAddress)
 				}
 
 				nodePrimaryAddrChanged, err := c.nodePrimaryAddrChanged()
@@ -394,7 +395,7 @@ func (c *addressManager) sync() {
 
 	currAddresses := sets.NewString()
 	for _, addr := range addrs {
-		ip, _, err := net.ParseCIDR(addr.String())
+		ip, ipnet, err := net.ParseCIDR(addr.String())
 		if err != nil {
 			klog.Errorf("Invalid IP address found on host: %s", addr.String())
 			continue
@@ -403,7 +404,8 @@ func (c *addressManager) sync() {
 			klog.V(5).Infof("Skipping non-useable IP address for host: %s", ip.String())
 			continue
 		}
-		currAddresses.Insert(ip.String())
+		netAddr := &net.IPNet{IP: ip, Mask: ipnet.Mask}
+		currAddresses.Insert(netAddr.String())
 	}
 
 	addrChanged := c.assignAddresses(currAddresses)
