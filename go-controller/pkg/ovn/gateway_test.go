@@ -400,14 +400,13 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 				NextHops:       ovntest.MustParseIPs("169.254.33.1"),
 				NodePortEnable: true,
 			}
-			sctpSupport := false
 
 			var err error
 			fakeOvn.controller.defaultCOPPUUID, err = EnsureDefaultCOPP(fakeOvn.nbClient)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			err = fakeOvn.controller.gatewayInit(
-				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, sctpSupport, joinLRPIPs, defLRPIPs, true)
+				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, joinLRPIPs, defLRPIPs, true)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			testData := []libovsdb.TestData{}
@@ -478,14 +477,13 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 				IPAddresses:    ovntest.MustParseIPNets("169.254.33.2/24"),
 				NodePortEnable: true,
 			}
-			sctpSupport := false
 
 			var err error
 			fakeOvn.controller.defaultCOPPUUID, err = EnsureDefaultCOPP(fakeOvn.nbClient)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			err = fakeOvn.controller.gatewayInit(
-				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, sctpSupport, joinLRPIPs, defLRPIPs, true)
+				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, joinLRPIPs, defLRPIPs, true)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			testData := []libovsdb.TestData{}
@@ -550,7 +548,6 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 				NextHops:       ovntest.MustParseIPs("169.254.33.1"),
 				NodePortEnable: true,
 			}
-			sctpSupport := false
 
 			var err error
 			fakeOvn.controller.defaultCOPPUUID, err = EnsureDefaultCOPP(fakeOvn.nbClient)
@@ -564,7 +561,7 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 
 			// Disable option:gateway_mtu.
 			err = fakeOvn.controller.gatewayInit(
-				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, sctpSupport, joinLRPIPs, defLRPIPs, false)
+				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, joinLRPIPs, defLRPIPs, false)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			expectedDatabaseState := generateGatewayInitExpectedNB(testData, expectedOVNClusterRouter, expectedNodeSwitch,
@@ -575,7 +572,7 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 			// Enable option:gateway_mtu.
 			expectedOVNClusterRouter.StaticRoutes = []string{}
 			err = fakeOvn.controller.gatewayInit(
-				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, sctpSupport, joinLRPIPs, defLRPIPs, true)
+				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, joinLRPIPs, defLRPIPs, true)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			expectedDatabaseState = generateGatewayInitExpectedNB(testData, expectedOVNClusterRouter, expectedNodeSwitch,
 				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, joinLRPIPs, defLRPIPs, skipSnat, mgmtPortIP,
@@ -635,14 +632,13 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 				NextHops:       ovntest.MustParseIPs("fd99::1"),
 				NodePortEnable: true,
 			}
-			sctpSupport := false
 
 			var err error
 			fakeOvn.controller.defaultCOPPUUID, err = EnsureDefaultCOPP(fakeOvn.nbClient)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			err = fakeOvn.controller.gatewayInit(
-				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, sctpSupport, joinLRPIPs, defLRPIPs, true)
+				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, joinLRPIPs, defLRPIPs, true)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			testData := []libovsdb.TestData{}
@@ -705,7 +701,6 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 				IPAddresses:    ovntest.MustParseIPNets("fd99::2/64"),
 				NodePortEnable: true,
 			}
-			sctpSupport := false
 
 			var err error
 			fakeOvn.controller.defaultCOPPUUID, err = EnsureDefaultCOPP(fakeOvn.nbClient)
@@ -714,7 +709,7 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 			config.IPv4Mode = false
 			config.IPv6Mode = true
 			err = fakeOvn.controller.gatewayInit(
-				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, sctpSupport, joinLRPIPs, defLRPIPs, true)
+				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, joinLRPIPs, defLRPIPs, true)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			testData := []libovsdb.TestData{}
@@ -780,14 +775,13 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 				NextHops:       ovntest.MustParseIPs("169.254.33.1", "fd99::1"),
 				NodePortEnable: true,
 			}
-			sctpSupport := false
 
 			var err error
 			fakeOvn.controller.defaultCOPPUUID, err = EnsureDefaultCOPP(fakeOvn.nbClient)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			err = fakeOvn.controller.gatewayInit(
-				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, sctpSupport, joinLRPIPs, defLRPIPs, true)
+				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, joinLRPIPs, defLRPIPs, true)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			testData := []libovsdb.TestData{}
@@ -851,7 +845,6 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 				NextHops:       ovntest.MustParseIPs("169.254.33.1"),
 				NodePortEnable: true,
 			}
-			sctpSupport := false
 			config.Gateway.DisableSNATMultipleGWs = true
 
 			var err error
@@ -859,7 +852,7 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			err = fakeOvn.controller.gatewayInit(
-				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, sctpSupport, joinLRPIPs, defLRPIPs, true)
+				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, joinLRPIPs, defLRPIPs, true)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			testData := []libovsdb.TestData{}
@@ -955,7 +948,6 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 				NextHops:       ovntest.MustParseIPs("169.254.33.1"),
 				NodePortEnable: true,
 			}
-			sctpSupport := false
 			config.Gateway.DisableSNATMultipleGWs = true
 
 			var err error
@@ -963,7 +955,7 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			err = fakeOvn.controller.gatewayInit(
-				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, sctpSupport, joinLRPIPs, defLRPIPs, true)
+				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, joinLRPIPs, defLRPIPs, true)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			testData := []libovsdb.TestData{}
@@ -1057,14 +1049,13 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 				NextHops:       ovntest.MustParseIPs("169.254.33.1", "fd99::1"),
 				NodePortEnable: true,
 			}
-			sctpSupport := false
 
 			var err error
 			fakeOvn.controller.defaultCOPPUUID, err = EnsureDefaultCOPP(fakeOvn.nbClient)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			err = fakeOvn.controller.gatewayInit(
-				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, sctpSupport, joinLRPIPs, defLRPIPs, true)
+				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, joinLRPIPs, defLRPIPs, true)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			testData := []libovsdb.TestData{}
@@ -1137,7 +1128,6 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 				NextHops:       ovntest.MustParseIPs("169.254.33.1"),
 				NodePortEnable: true,
 			}
-			sctpSupport := false
 			config.Gateway.DisableSNATMultipleGWs = true
 
 			var err error
@@ -1145,7 +1135,7 @@ var _ = ginkgo.Describe("Gateway Init Operations", func() {
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			err = fakeOvn.controller.gatewayInit(
-				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, sctpSupport, joinLRPIPs, defLRPIPs, true)
+				nodeName, clusterIPSubnets, hostSubnets, l3GatewayConfig, joinLRPIPs, defLRPIPs, true)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			testData := []libovsdb.TestData{}

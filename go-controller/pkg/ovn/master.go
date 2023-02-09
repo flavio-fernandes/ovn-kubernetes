@@ -305,7 +305,7 @@ func (oc *DefaultNetworkController) syncGatewayLogicalNetwork(node *kapi.Node, l
 
 	enableGatewayMTU := util.ParseNodeGatewayMTUSupport(node)
 
-	err = oc.gatewayInit(node.Name, clusterSubnets, hostSubnets, l3GatewayConfig, oc.SCTPSupport, gwLRPIPs, drLRPIPs,
+	err = oc.gatewayInit(node.Name, clusterSubnets, hostSubnets, l3GatewayConfig, gwLRPIPs, drLRPIPs,
 		enableGatewayMTU)
 	if err != nil {
 		return fmt.Errorf("failed to init shared interface gateway: %v", err)

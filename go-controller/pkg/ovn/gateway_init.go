@@ -91,7 +91,7 @@ func (oc *DefaultNetworkController) cleanupStalePodSNATs(nodeName string, nodeIP
 // gatewayInit creates a gateway router for the local chassis.
 // enableGatewayMTU enables options:gateway_mtu for gateway routers.
 func (oc *DefaultNetworkController) gatewayInit(nodeName string, clusterIPSubnet []*net.IPNet, hostSubnets []*net.IPNet,
-	l3GatewayConfig *util.L3GatewayConfig, sctpSupport bool, gwLRPIfAddrs, drLRPIfAddrs []*net.IPNet,
+	l3GatewayConfig *util.L3GatewayConfig, gwLRPIfAddrs, drLRPIfAddrs []*net.IPNet,
 	enableGatewayMTU bool) error {
 
 	gwLRPIPs := make([]net.IP, 0)
