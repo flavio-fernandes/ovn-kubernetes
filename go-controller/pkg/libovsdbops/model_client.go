@@ -21,6 +21,8 @@ type modelClient struct {
 	client client.Client
 }
 
+const MutateOperationUpdate ovsdb.Mutator = "update"
+
 func newModelClient(client client.Client) modelClient {
 	return modelClient{
 		client: client,
@@ -49,6 +51,11 @@ func extractUUIDsFromModels(models interface{}) []string {
 
 // buildMutationsFromFields builds mutations that use the fields as values.
 func buildMutationsFromFields(fields []interface{}, mutator ovsdb.Mutator) ([]model.Mutation, error) {
+	isUpdate := false
+	if mutator == MutateOperationUpdate {
+		mutator = ovsdb.MutateOperationInsert
+		isUpdate = true
+	}
 	mutations := []model.Mutation{}
 	for _, field := range fields {
 		switch v := field.(type) {
@@ -85,6 +92,20 @@ func buildMutationsFromFields(fields []interface{}, mutator ovsdb.Mutator) ([]mo
 					mutations = append(mutations, mutation)
 				}
 				continue
+			}
+			if isUpdate {
+				removeKeys := make([]string, 0, len(*v))
+				for key := range *v {
+					removeKeys = append(removeKeys, key)
+				}
+				if len(removeKeys) > 0 {
+					mutation := model.Mutation{
+						Field:   field,
+						Mutator: ovsdb.MutateOperationDelete,
+						Value:   removeKeys,
+					}
+					mutations = append(mutations, mutation)
+				}
 			}
 			mutation := model.Mutation{
 				Field:   field,
@@ -154,6 +175,10 @@ type operationModel struct {
 	// Model will have UUID set, and it can be used in DoAfter. This only works
 	// if BulkOp is false and Model != nil.
 	DoAfter func()
+	// Mutator to use for mutations.  For already existing records this should
+	// be set to MutateOperationUpdate.  If not explicitly set,
+	// ovsdb.MutateOperationInsert is used as default.
+	InsertMutator ovsdb.Mutator
 }
 
 func onModelUpdatesNone() []interface{} {
@@ -206,7 +231,11 @@ func (m *modelClient) createOrUpdateOps(ops []ovsdb.Operation, opModels ...opera
 		if opModel.OnModelUpdates != nil {
 			return m.update(model, opModel)
 		} else if opModel.OnModelMutations != nil {
-			return m.mutate(model, opModel, ovsdb.MutateOperationInsert)
+			mutator := ovsdb.MutateOperationInsert
+			if opModel.InsertMutator != "" {
+				mutator = opModel.InsertMutator
+			}
+			return m.mutate(model, opModel, mutator)
 		}
 		return nil, nil
 	}

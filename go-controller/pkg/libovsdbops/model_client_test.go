@@ -1466,6 +1466,23 @@ func TestBuildMutationsFromFields(t *testing.T) {
 			},
 		},
 		{
+			name:    "build update mutation over map",
+			fields:  []interface{}{&mapField},
+			mutator: MutateOperationUpdate,
+			mutations: []model.Mutation{
+				{
+					Field:   &mapField,
+					Mutator: ovsdb.MutateOperationDelete,
+					Value:   []string{"key1", "key2", ""},
+				},
+				{
+					Field:   &mapField,
+					Mutator: ovsdb.MutateOperationInsert,
+					Value:   mapField,
+				},
+			},
+		},
+		{
 			name:    "build delete mutation over map",
 			fields:  []interface{}{&mapField},
 			mutator: ovsdb.MutateOperationDelete,
