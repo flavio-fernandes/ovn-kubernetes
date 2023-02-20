@@ -2010,6 +2010,9 @@ func (oc *DefaultNetworkController) initEgressIPAllocator(node *kapi.Node) (err 
 		for i, subnet := range nodeSubnets {
 			mgmtIPs[i] = util.GetNodeManagementIfAddr(subnet).IP
 		}
+
+		// ff (TODO): populate host addresses here
+
 		oc.eIPC.allocator.cache[node.Name] = &egressNode{
 			name:           node.Name,
 			egressIPConfig: parsedEgressIPConfig,
@@ -2111,7 +2114,9 @@ func InitClusterEgressPolicies(nbClient libovsdbclient.Client, addressSetFactory
 // egressNode is a cache helper used for egress IP assignment, representing an egress node
 type egressNode struct {
 	egressIPConfig     *util.ParsedNodeEgressIPConfiguration
-	mgmtIPs            []net.IP
+	mgmtIPs            []net.IP // this will go away, replaced by nodePrimaryAddr+nodeSecondaryAddrs
+	nodePrimaryAddr    net.IPNet
+	nodeSecondaryAddrs []net.IPNet
 	allocations        map[string]string
 	healthClient       healthcheck.EgressIPHealthClient
 	isReady            bool
