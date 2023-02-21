@@ -705,6 +705,16 @@ func (n *OvnNode) startEgressIPHealthCheckingServer(mgmtPortEntry managementPort
 		defer n.wg.Done()
 		healthServer.Run(n.stopChan)
 	}()
+
+	// start monitoring of egress ips for node
+	eip_node_mgr := newEgressIpNodeManager(n.name, n.watchFactory)
+	eip_node_mgr.Run(n.stopChan, n.wg)
+
+	// go wait.Until(func() {
+	// 	checkSecondaryEgressIPAddresses(n.name,
+	// 		n.watchFactory.(*factory.WatchFactory))
+	// }, time.Minute, n.stopChan)
+
 	return nil
 }
 
