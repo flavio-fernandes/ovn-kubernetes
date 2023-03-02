@@ -73,6 +73,9 @@ const (
 	// capacity for each node. It is set by
 	// openshift/cloud-network-config-controller
 	cloudEgressIPConfigAnnotationKey = "cloud.network.openshift.io/egress-ipconfig"
+
+	// ovnNodeId is the id (of type integer) of a node. It is set by cluster-manager.
+	ovnNodeId = "k8s.ovn.org/ovn-node-id"
 )
 
 type L3GatewayConfig struct {
@@ -550,4 +553,28 @@ func ParseNodeHostAddresses(node *kapi.Node) (sets.Set[string], error) {
 	}
 
 	return sets.New(cfg...), nil
+}
+
+// UpdateNodeIdAnnotation updates the ovnNodeId annotation with the node id.
+func UpdateNodeIdAnnotation(annotations map[string]string, nodeId int) map[string]string {
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+
+	annotations[ovnNodeId] = strconv.Itoa(nodeId)
+	return annotations
+}
+
+// GetNodeId returns the id of the node set in the 'ovnNodeId' node annotation.
+func GetNodeId(node *kapi.Node) int {
+	nodeId, ok := node.Annotations[ovnNodeId]
+	if !ok {
+		return -1
+	}
+
+	id, err := strconv.Atoi(nodeId)
+	if err != nil {
+		return -1
+	}
+	return id
 }

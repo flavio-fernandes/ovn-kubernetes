@@ -21,6 +21,7 @@ import (
 type ClusterManager struct {
 	client                      clientset.Interface
 	defaultNetClusterController *networkClusterController
+	zoneClusterController       *zoneClusterController
 	wf                          *factory.WatchFactory
 	wg                          *sync.WaitGroup
 	secondaryNetClusterManager  *secondaryNetworkClusterManager
@@ -37,9 +38,11 @@ func NewClusterManager(ovnClient *util.OVNClusterManagerClientset, wf *factory.W
 	identity string, wg *sync.WaitGroup, recorder record.EventRecorder) (*ClusterManager, error) {
 	defaultNetClusterController := newNetworkClusterController(ovntypes.DefaultNetworkName, config.Default.ClusterSubnets,
 		ovnClient, wf, config.HybridOverlay.Enabled, &util.DefaultNetInfo{}, &util.DefaultNetConfInfo{})
+	zoneClusterController := newZoneClusterController(ovnClient, wf)
 	cm := &ClusterManager{
 		client:                      ovnClient.KubeClient,
 		defaultNetClusterController: defaultNetClusterController,
+		zoneClusterController:       zoneClusterController,
 		wg:                          wg,
 		wf:                          wf,
 		recorder:                    recorder,
@@ -69,6 +72,10 @@ func (cm *ClusterManager) Start(ctx context.Context) error {
 		return err
 	}
 
+	if err := cm.zoneClusterController.Start(ctx); err != nil {
+		return err
+	}
+
 	if config.OVNKubernetesFeature.EnableMultiNetwork {
 		if err := cm.secondaryNetClusterManager.Start(); err != nil {
 			return err
@@ -82,6 +89,7 @@ func (cm *ClusterManager) Start(ctx context.Context) error {
 func (cm *ClusterManager) Stop() {
 	klog.Info("Stopping the cluster manager")
 	cm.defaultNetClusterController.Stop()
+	cm.zoneClusterController.Stop()
 	if config.OVNKubernetesFeature.EnableMultiNetwork {
 		cm.secondaryNetClusterManager.Stop()
 	}
