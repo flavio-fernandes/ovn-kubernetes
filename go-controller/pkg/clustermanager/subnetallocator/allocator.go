@@ -25,6 +25,7 @@ type SubnetAllocator interface {
 	ReleaseNetworks(string, ...*net.IPNet) error
 	// ReleaseAllNetworks releases all networks owned by the given owner
 	ReleaseAllNetworks(string)
+	GetAllOwnerNetworks(string) []*net.IPNet
 }
 
 type BaseSubnetAllocator struct {
@@ -188,6 +189,12 @@ func (sna *BaseSubnetAllocator) ReleaseAllNetworks(owner string) {
 	sna.releaseAllNetworks(owner)
 }
 
+func (sna *BaseSubnetAllocator) GetAllOwnerNetworks(owner string) []*net.IPNet {
+	sna.Lock()
+	defer sna.Unlock()
+	return sna.getAllOwnerNetworks(owner)
+}
+
 // releaseNetworks attempts to release all given subnets, even if a failure
 // occurs during release. It returns nil, or an aggregate error for any
 // failures that occurred.
@@ -235,6 +242,18 @@ func (sna *BaseSubnetAllocator) releaseAllNetworks(owner string) {
 	for _, snr := range sna.v6ranges {
 		snr.releaseAllNetworks(owner)
 	}
+}
+
+func (sna *BaseSubnetAllocator) getAllOwnerNetworks(owner string) []*net.IPNet {
+	ipnets := make([]*net.IPNet, 0)
+	for _, snr := range sna.v4ranges {
+		ipnets = snr.getAllOwnerNetworks(owner, ipnets)
+	}
+	for _, snr := range sna.v6ranges {
+		ipnets = snr.getAllOwnerNetworks(owner, ipnets)
+	}
+
+	return ipnets
 }
 
 // subnetAllocatorRange handles allocating subnets out of a single CIDR
@@ -422,4 +441,16 @@ func (snr *subnetAllocatorRange) releaseAllNetworks(owner string) {
 			snr.used--
 		}
 	}
+}
+
+// releaseAllNetworks marks all networks of a given owner as being not in use.
+func (snr *subnetAllocatorRange) getAllOwnerNetworks(owner string, ipnets []*net.IPNet) []*net.IPNet {
+	for network, existingOwner := range snr.allocMap {
+		if existingOwner == owner {
+			_, ipnet, _ := net.ParseCIDR(network)
+			ipnets = append(ipnets, ipnet)
+		}
+	}
+
+	return ipnets
 }
