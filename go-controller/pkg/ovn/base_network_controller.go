@@ -665,6 +665,11 @@ func (bnc *BaseNetworkController) doesNetworkRequireIPAM() bool {
 	return !((bnc.TopologyType() == types.Layer2Topology || bnc.TopologyType() == types.LocalnetTopology) && len(bnc.Subnets()) == 0)
 }
 
+// isLocalZoneNode returns true if the node is part of the local zone.
+func (bnc *BaseNetworkController) isLocalZoneNode(node *kapi.Node) bool {
+	return util.GetNodeZone(node) == bnc.zone
+}
+
 func (bnc *BaseNetworkController) GetLocalZoneNodes() ([]*kapi.Node, error) {
 	nodes, err := bnc.watchFactory.GetNodes()
 	if err != nil {

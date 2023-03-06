@@ -1,6 +1,8 @@
 package clustermanager
 
 import (
+	"fmt"
+
 	"github.com/containernetworking/cni/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
@@ -20,6 +22,7 @@ type secondaryNetworkClusterManager struct {
 	nadController *nad.NetAttachDefinitionController
 	ovnClient     *util.OVNClusterManagerClientset
 	watchFactory  *factory.WatchFactory
+	idAllocator   *IdAllocator
 }
 
 func newSecondaryNetworkClusterManager(ovnClient *util.OVNClusterManagerClientset,
@@ -28,6 +31,7 @@ func newSecondaryNetworkClusterManager(ovnClient *util.OVNClusterManagerClientse
 	sncm := &secondaryNetworkClusterManager{
 		ovnClient:    ovnClient,
 		watchFactory: wf,
+		idAllocator:  NewIdAlloctar("NetworkIds", 4096),
 	}
 	var err error
 	sncm.nadController, err = nad.NewNetAttachDefinitionController(
@@ -42,6 +46,21 @@ func newSecondaryNetworkClusterManager(ovnClient *util.OVNClusterManagerClientse
 // needed logical entities
 func (sncm *secondaryNetworkClusterManager) Start() error {
 	klog.Infof("Starting secondary network cluster manager")
+
+	// Reserve the network ids in the id allocator for the existing secondary layer3 networks.
+	nodes, err := sncm.watchFactory.GetNodes()
+	if err != nil {
+		return fmt.Errorf("error getting the nodes from the watch factory : err - %v", err)
+	}
+
+	for _, n := range nodes {
+		networkIdsMap, err := util.GetNodeNetworkIdsAnnotationNetworkIds(n)
+		if err == nil {
+			for networkName, id := range networkIdsMap {
+				_ = sncm.idAllocator.ReserveId(networkName, id)
+			}
+		}
+	}
 	return sncm.nadController.Start()
 }
 
@@ -56,9 +75,13 @@ func (sncm *secondaryNetworkClusterManager) Stop() {
 func (sncm *secondaryNetworkClusterManager) NewNetworkController(nInfo util.NetInfo,
 	netConfInfo util.NetConfInfo) (nad.NetworkController, error) {
 	topoType := netConfInfo.TopologyType()
+	networkId, err := sncm.idAllocator.AllocateId(nInfo.GetNetworkName())
+	if err != nil {
+		return nil, err
+	}
 	if topoType == ovntypes.Layer3Topology {
 		layer3NetConfInfo := netConfInfo.(*util.Layer3NetConfInfo)
-		sncc := newNetworkClusterController(nInfo.GetNetworkName(), layer3NetConfInfo.ClusterSubnets,
+		sncc := newNetworkClusterController(nInfo.GetNetworkName(), networkId, layer3NetConfInfo.ClusterSubnets,
 			sncm.ovnClient, sncm.watchFactory, false, nInfo, netConfInfo)
 		return sncc, nil
 	}
@@ -122,6 +145,6 @@ func (sncm *secondaryNetworkClusterManager) CleanupDeletedNetworks(allController
 func (sncm *secondaryNetworkClusterManager) newDummyLayer3NetworkController(netName string) nad.NetworkController {
 	netInfo := util.NewNetInfo(&ovncnitypes.NetConf{NetConf: types.NetConf{Name: netName}, Topology: ovntypes.Layer3Topology})
 	layer3NetConfInfo := &util.Layer3NetConfInfo{}
-	return newNetworkClusterController(netInfo.GetNetworkName(), layer3NetConfInfo.ClusterSubnets,
+	return newNetworkClusterController(netInfo.GetNetworkName(), -1, layer3NetConfInfo.ClusterSubnets,
 		sncm.ovnClient, sncm.watchFactory, false, netInfo, layer3NetConfInfo)
 }

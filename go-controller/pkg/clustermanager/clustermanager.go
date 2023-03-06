@@ -36,7 +36,7 @@ type ClusterManager struct {
 // NewClusterManager creates a new cluster manager to manage the cluster nodes.
 func NewClusterManager(ovnClient *util.OVNClusterManagerClientset, wf *factory.WatchFactory,
 	identity string, wg *sync.WaitGroup, recorder record.EventRecorder) (*ClusterManager, error) {
-	defaultNetClusterController := newNetworkClusterController(ovntypes.DefaultNetworkName, config.Default.ClusterSubnets,
+	defaultNetClusterController := newNetworkClusterController(ovntypes.DefaultNetworkName, 0, config.Default.ClusterSubnets,
 		ovnClient, wf, config.HybridOverlay.Enabled, &util.DefaultNetInfo{}, &util.DefaultNetConfInfo{})
 	zoneClusterController := newZoneClusterController(ovnClient, wf)
 	cm := &ClusterManager{

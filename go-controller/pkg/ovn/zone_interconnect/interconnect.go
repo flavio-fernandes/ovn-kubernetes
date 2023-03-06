@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	transitSwitchTunnelKey = "16711683"
+	BaseTransitSwitchTunnelKey = 16711683
 )
 
 type ZoneInterconnectHandler struct {
@@ -99,10 +99,21 @@ func (zic *ZoneInterconnectHandler) DeleteNode(node *corev1.Node) error {
 	return zic.cleanupNodeTransitSwitchPort(node)
 }
 
+// Cleanup deletes the transit switch for the network
+func (zic *ZoneInterconnectHandler) Cleanup() error {
+	klog.Infof("Deleting the transit switch [%s] for the network [%s]", zic.networkTransitSwitchName, zic.GetNetworkName())
+	return libovsdbops.DeleteLogicalSwitch(zic.nbClient, zic.networkTransitSwitchName)
+}
+
 func (zic *ZoneInterconnectHandler) createLocalZoneNodeResources(node *corev1.Node, nodeId int) error {
 	nodeTransitSwitchPortIps, err := util.ParseNodeTransitSwitchPortAddresses(node)
 	if err != nil || len(nodeTransitSwitchPortIps) == 0 {
 		return fmt.Errorf("failed to get the node transit switch port ips for node %s: %v", node.Name, err)
+	}
+
+	networkId, err := util.ParseNetworkIdAnnotation(node, zic.GetNetworkName())
+	if err != nil {
+		return fmt.Errorf("failed to get the network id for the network %s on node %s: %v", zic.GetNetworkName(), node.Name, err)
 	}
 
 	var transitRouterPortMac net.HardwareAddr
@@ -128,10 +139,11 @@ func (zic *ZoneInterconnectHandler) createLocalZoneNodeResources(node *corev1.No
 
 	_, err = libovsdbops.GetLogicalSwitch(zic.nbClient, ts)
 	if err != nil {
+		transitSwitchTunnelKey := BaseTransitSwitchTunnelKey + networkId
 		// Create transit switch
 		ts.OtherConfig = map[string]string{
 			"interconn-ts":             zic.networkTransitSwitchName,
-			"requested-tnl-key":        transitSwitchTunnelKey,
+			"requested-tnl-key":        strconv.Itoa(transitSwitchTunnelKey),
 			"mcast_snoop":              "true",
 			"mcast_flood_unregistered": "true",
 		}
@@ -181,16 +193,22 @@ func (zic *ZoneInterconnectHandler) createRemoteZoneNodeResources(node *corev1.N
 		return fmt.Errorf("failed to get the node transit switch port Ips : %v", err)
 	}
 
+	networkId, err := util.ParseNetworkIdAnnotation(node, zic.GetNetworkName())
+	if err != nil {
+		return fmt.Errorf("failed to get the network id for the network %s on node %s: %v", zic.GetNetworkName(), node.Name, err)
+	}
+
 	ts := &nbdb.LogicalSwitch{
 		Name: zic.networkTransitSwitchName,
 	}
 
 	_, err = libovsdbops.GetLogicalSwitch(zic.nbClient, ts)
 	if err != nil {
+		transitSwitchTunnelKey := BaseTransitSwitchTunnelKey + networkId
 		// Create transit switch
 		ts.OtherConfig = map[string]string{
 			"interconn-ts":             zic.networkTransitSwitchName,
-			"requested-tnl-key":        transitSwitchTunnelKey,
+			"requested-tnl-key":        strconv.Itoa(transitSwitchTunnelKey),
 			"mcast_snoop":              "true",
 			"mcast_flood_unregistered": "true",
 		}

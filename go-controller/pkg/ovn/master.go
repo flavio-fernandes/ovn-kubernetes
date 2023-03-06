@@ -941,8 +941,3 @@ func (oc *DefaultNetworkController) createACLLoggingMeter() error {
 
 	return nil
 }
-
-// isLocalZoneNode returns true if the node is part of the local zone.
-func (oc *DefaultNetworkController) isLocalZoneNode(node *kapi.Node) bool {
-	return util.GetNodeZone(node) == oc.zone
-}

@@ -250,6 +250,7 @@ var _ = ginkgo.Describe("Zone Interconnect Operations", func() {
 						"k8s.ovn.org/zone-join-subnets":                "{\"default\":[\"100.44.1.0/24\"]}",
 						"k8s.ovn.org/ovn-node-transit-switch-port-ips": "[\"168.254.0.1/16\"]",
 						"k8s.ovn.org/ovn-gw-router-port-ips":           "[\"100.45.1.1/24\"]",
+						"k8s.ovn.org/network-ids":                      "{\"default\":\"0\"}",
 					},
 				},
 				Status: v1.NodeStatus{
@@ -268,6 +269,7 @@ var _ = ginkgo.Describe("Zone Interconnect Operations", func() {
 						"k8s.ovn.org/zone-join-subnets":                "{\"default\":[\"100.44.2.0/24\"]}",
 						"k8s.ovn.org/ovn-node-transit-switch-port-ips": "[\"168.254.0.2/16\"]",
 						"k8s.ovn.org/ovn-gw-router-port-ips":           "[\"100.45.2.1/24\"]",
+						"k8s.ovn.org/network-ids":                      "{\"default\":\"0\"}",
 					},
 				},
 				Status: v1.NodeStatus{
@@ -286,6 +288,7 @@ var _ = ginkgo.Describe("Zone Interconnect Operations", func() {
 						"k8s.ovn.org/zone-join-subnets":                "{\"default\":[\"100.44.3.0/24\"]}",
 						"k8s.ovn.org/ovn-node-transit-switch-port-ips": "[\"168.254.0.3/16\"]",
 						"k8s.ovn.org/ovn-gw-router-port-ips":           "[\"100.45.3.1/24\"]",
+						"k8s.ovn.org/network-ids":                      "{\"default\":\"0\"}",
 					},
 				},
 				Status: v1.NodeStatus{
@@ -400,6 +403,7 @@ var _ = ginkgo.Describe("Zone Interconnect Operations", func() {
 						"k8s.ovn.org/zone-join-subnets":                "{\"blue\":[\"100.44.1.0/24\"]}",
 						"k8s.ovn.org/ovn-node-transit-switch-port-ips": "[\"168.254.0.1/16\"]",
 						"k8s.ovn.org/ovn-gw-router-port-ips":           "[\"100.45.1.1/24\"]",
+						"k8s.ovn.org/network-ids":                      "{\"blue\":\"1\"}",
 					},
 				},
 				Status: v1.NodeStatus{
@@ -418,6 +422,7 @@ var _ = ginkgo.Describe("Zone Interconnect Operations", func() {
 						"k8s.ovn.org/zone-join-subnets":                "{\"blue\":[\"100.44.2.0/24\"]}",
 						"k8s.ovn.org/ovn-node-transit-switch-port-ips": "[\"168.254.0.2/16\"]",
 						"k8s.ovn.org/ovn-gw-router-port-ips":           "[\"100.45.2.1/24\"]",
+						"k8s.ovn.org/network-ids":                      "{\"blue\":\"1\"}",
 					},
 				},
 				Status: v1.NodeStatus{
@@ -436,6 +441,7 @@ var _ = ginkgo.Describe("Zone Interconnect Operations", func() {
 						"k8s.ovn.org/zone-join-subnets":                "{\"blue\":[\"100.44.3.0/24\"]}",
 						"k8s.ovn.org/ovn-node-transit-switch-port-ips": "[\"168.254.0.3/16\"]",
 						"k8s.ovn.org/ovn-gw-router-port-ips":           "[\"100.45.3.1/24\"]",
+						"k8s.ovn.org/network-ids":                      "{\"blue\":\"1\"}",
 					},
 				},
 				Status: v1.NodeStatus{
@@ -528,6 +534,11 @@ var _ = ginkgo.Describe("Zone Interconnect Operations", func() {
 				// Set the node transit switch port ips
 				testNode4.Annotations["k8s.ovn.org/ovn-node-transit-switch-port-ips"] = "[\"168.254.0.4/16\"]"
 				err = zoneICHandler.AddLocalZoneNode(&testNode4)
+				gomega.Expect(err).To(gomega.HaveOccurred(), "failed to get the network id for the network default on node node4")
+
+				// Set the network id for default network
+				testNode4.Annotations["k8s.ovn.org/network-ids"] = "{\"default\":\"0\"}"
+				err = zoneICHandler.AddLocalZoneNode(&testNode4)
 				gomega.Expect(err).To(gomega.HaveOccurred(), "failed to create/update cluster router ovn_cluster_router to add transit switch port rtots-node4 for the node node4")
 
 				// Create the cluster router
@@ -617,6 +628,11 @@ var _ = ginkgo.Describe("Zone Interconnect Operations", func() {
 				// Set the node transit switch port ips
 				testNode4.Annotations["k8s.ovn.org/ovn-node-transit-switch-port-ips"] = "[\"168.254.0.4/16\"]"
 				err = zoneICHandler.AddRemoteZoneNode(&testNode4)
+				gomega.Expect(err).To(gomega.HaveOccurred(), "failed to get the network id for the network default on node node4")
+
+				// Set the network id for default network
+				testNode4.Annotations["k8s.ovn.org/network-ids"] = "{\"default\":\"0\"}"
+				err = zoneICHandler.AddLocalZoneNode(&testNode4)
 				gomega.Expect(err).To(gomega.HaveOccurred(), "failed to update chassis node4 for remote port tstor-node4")
 
 				// Create remote chassis
