@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -x
+
 restart_kubelet() {
  echo "Restarting kubelet on nodes $NODES"
  for n in $NODES; do
@@ -33,6 +35,8 @@ convert_cni() {
   # restart ovnkube-master
   # FIXME: kubectl rollout restart deployment leaves the old pod hanging 
   # as workaround we delete the master directly
+  kubectl -n ovn-kubernetes delete pod -l name=ovnkube-db ||:
+  kubectl -n ovn-kubernetes delete pod -l name=ovnkube-zone-ncm ||:
   kubectl -n ovn-kubernetes delete pod -l name=ovnkube-master
   # restart ovnkube-node
   kubectl -n ovn-kubernetes rollout restart daemonset ovnkube-node
@@ -103,12 +107,19 @@ SECONDARY_SERVICE_SUBNET=${SECONDARY_SERVICE_SUBNET:-"fd00:10:96::/112"}
 SECONDARY_CLUSTER_SUBNET=${SECONDARY_CLUSTER_SUBNET:-"fd00:10:244::/56"}
 
 # NOTE: ovn only
-export KUBECONFIG=${HOME}/ovn.conf
+export KUBECONFIG=${KUBECONFIG:-${HOME}/ovn.conf}
 
 # KIND nodes
 NODES=$(kind get nodes --name ${CLUSTER_NAME})
 CONTROL_PLANE_NODES=$(kind get nodes --name ${CLUSTER_NAME} | grep control)
 WORKER_NODES=$(kind get nodes --name ${CLUSTER_NAME} | grep worker)
+
+# Load images into KIND
+CLUSTER=ovn
+for IMG in registry.k8s.io/e2e-test-images/agnhost:2.21 quay.io/ffernand/httpd:2.4 ; do \
+  docker pull $IMG
+  kind load docker-image $IMG --name $CLUSTER
+done
 
 # Create a deployment with 2 pods
 cat <<EOF | kubectl apply -f -
@@ -199,7 +210,7 @@ spec:
     spec:
       containers:
       - name: httpd
-        image: httpd:2.4
+        image: quay.io/ffernand/httpd:2.4
         ports:
         - containerPort: 80
 ---
