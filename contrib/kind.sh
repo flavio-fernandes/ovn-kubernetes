@@ -105,6 +105,7 @@ usage() {
     echo "                 [-ehp|--egress-ip-healthcheck-port <num>]"
     echo "                 [-is | --ipsec]"
     echo "                 [--isolated]"
+    echo "                 [-ic | --interconnect-enable]"
     echo "                 [-h]]"
     echo ""
     echo "-cf  | --config-file                Name of the KIND J2 configuration file."
@@ -150,6 +151,7 @@ usage() {
     echo "-ehp | --egress-ip-healthcheck-port TCP port used for gRPC session by egress IP node check. DEFAULT: 9107 (Use "0" for legacy dial to port 9)."
     echo "-is  | --ipsec                      Enable IPsec encryption (spawns ovn-ipsec pods)"
     echo "-sm  | --scale-metrics              Enable scale metrics"
+    echo "-ic  | --interconnect-enable        Enable OVN-IC (cluster-manager + network-cluster-manager)"
     echo "--isolated                          Deploy with an isolated environment (no default gateway)"
     echo "--delete                            Delete current cluster"
     echo "--deploy                            Deploy ovn kubernetes without restarting kind"
@@ -302,6 +304,9 @@ parse_args() {
                                                 ;;
             -mne | --multi-network-enable )     shift
                                                 ENABLE_MULTI_NET=true
+                                                ;;
+            -ic | --interconnect-enable )       shift
+                                                OVN_INTERCONNECT_ENABLE=true
                                                 ;;
             --delete )                          delete
                                                 exit
