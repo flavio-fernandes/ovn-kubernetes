@@ -389,14 +389,8 @@ func (h *zoneClusterControllerEventHandler) AreResourcesEqual(obj1, obj2 interfa
 			return false, fmt.Errorf("could not cast obj2 of type %T to *corev1.Node", obj2)
 		}
 
-		// Check if the annotations have changed.
-		if util.NodeIDAnnotationChanged(node1, node2) {
-			return false, nil
-		}
-		if util.NodeGatewayRouterLRPAddrAnnotationChanged(node1, node2) {
-			return false, nil
-		}
-		if util.NodeTransitSwitchPortAddrAnnotationChanged(node1, node2) {
+		if util.NodeZoneClusterChanged(node1, node2) {
+			// Annotations have changed: node resources are not equal
 			return false, nil
 		}
 		return true, nil

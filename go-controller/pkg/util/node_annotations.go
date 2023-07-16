@@ -464,6 +464,20 @@ func NodeTransitSwitchPortAddrAnnotationChanged(oldNode, newNode *corev1.Node) b
 	return oldNode.Annotations[ovnTransitSwitchPortAddr] != newNode.Annotations[ovnTransitSwitchPortAddr]
 }
 
+func NodeZoneClusterChanged(node1, node2 *corev1.Node) bool {
+	// Check if the annotations have changed.
+	if NodeIDAnnotationChanged(node1, node2) {
+		return true
+	}
+	if NodeGatewayRouterLRPAddrAnnotationChanged(node1, node2) {
+		return true
+	}
+	if NodeTransitSwitchPortAddrAnnotationChanged(node1, node2) {
+		return true
+	}
+	return false
+}
+
 const UnlimitedNodeCapacity = math.MaxInt32
 
 type ifAddr struct {
