@@ -887,6 +887,7 @@ func (h *defaultNetworkControllerEventHandler) UpdateResource(oldObj, newObj int
 					nodeGatewayMTUSupportChanged(oldNode, newNode))
 				_, hoSync := h.oc.hybridOverlayFailed.Load(newNode.Name)
 				_, syncZoneIC := h.oc.syncZoneICFailed.Load(newNode.Name)
+				syncZoneIC = syncZoneIC || util.NodeNetworkIDAnnotationChanged(oldNode, newNode, h.oc.GetNetworkName())
 				nodeSyncsParam = &nodeSyncs{
 					nodeSync,
 					clusterRtrSync,
