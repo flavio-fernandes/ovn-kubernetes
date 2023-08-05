@@ -822,9 +822,9 @@ func (o *ovsdbClient) transact(ctx context.Context, dbName string, skipChWrite b
 	if o.rpcClient == nil {
 		return nil, ErrNotConnected
 	}
-	dbgLogger := o.logger.WithValues("database", dbName).V(4)
+	dbgLogger := o.logger.V(4)
 	if dbgLogger.Enabled() {
-		dbgLogger.Info("transacting operations", "operations", fmt.Sprintf("%+v", operation))
+		dbgLogger.Info(fmt.Sprintf("%+v", operation))
 	}
 	err := o.rpcClient.CallWithContext(ctx, "transact", args, &reply)
 	if err != nil {
