@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"log"
 	"os"
 	"reflect"
 	"strings"
@@ -23,6 +24,9 @@ import (
 	"gopkg.in/fsnotify/fsnotify.v1"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
+
+	"github.com/go-logr/stdr"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // newClient creates a new client object given the provided config
@@ -31,7 +35,29 @@ import (
 func newClient(cfg config.OvnAuthConfig, dbModel model.ClientDBModel, stopCh <-chan struct{}, opts ...client.Option) (client.Client, error) {
 	const connectTimeout time.Duration = types.OVSDBTimeout * 2
 	const inactivityTimeout time.Duration = types.OVSDBTimeout * 18
-	logger := klogr.New()
+
+	orig_logger := klogr.New()
+
+	checkFile, err := os.OpenFile("/tmp/app.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		fmt.Printf("error opening file: %v", err)
+		os.Exit(1)
+	}
+	_ = checkFile.Close()
+
+	// Create the lumberjack logger, which will write to a rolling log file.
+	ll := &lumberjack.Logger{
+		Filename:   "/tmp/app.log",
+		MaxSize:    10, // MB
+		MaxBackups: 5,
+		MaxAge:     30, // Days
+		Compress:   true,
+	}
+	clientLog := log.New(ll, "", log.Ldate|log.Ltime|log.Lshortfile)
+	// clientLog.SetOutput(ll)
+
+	logger := stdr.New(clientLog)
+
 	options := []client.Option{
 		// Reading and parsing the DB after reconnect at scale can (unsurprisingly)
 		// take longer than a normal ovsdb operation. Give it a bit more time so
@@ -39,8 +65,16 @@ func newClient(cfg config.OvnAuthConfig, dbModel model.ClientDBModel, stopCh <-c
 		// inactivity check on the ovsdb connection.
 		client.WithInactivityCheck(inactivityTimeout, connectTimeout, &backoff.ZeroBackOff{}),
 		client.WithLeaderOnly(true),
-		client.WithLogger(&logger),
 	}
+
+	if true {
+		klog.Infof("libovsdb client using lumberjack %#v", ll)
+		options = append(options, client.WithLogger(&logger))
+	} else {
+		klog.Infof("libovsdb client using klogr")
+		options = append(options, client.WithLogger(&orig_logger))
+	}
+
 	options = append(options, opts...)
 
 	for _, endpoint := range strings.Split(cfg.GetURL(), ",") {
