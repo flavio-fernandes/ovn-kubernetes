@@ -38,17 +38,17 @@ func newClient(cfg config.OvnAuthConfig, dbModel model.ClientDBModel, stopCh <-c
 
 	orig_logger := klogr.New()
 
-	checkFile, err := os.OpenFile("/tmp/app.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		fmt.Printf("error opening file: %v", err)
-		os.Exit(1)
-	}
-	_ = checkFile.Close()
+	// checkFile, err := os.OpenFile("/tmp/app.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	// if err != nil {
+	// 	fmt.Printf("error opening file: %v", err)
+	// 	os.Exit(1)
+	// }
+	// _ = checkFile.Close()
 
 	// Create the lumberjack logger, which will write to a rolling log file.
 	ll := &lumberjack.Logger{
 		Filename:   "/tmp/app.log",
-		MaxSize:    10, // MB
+		MaxSize:    1, // MB
 		MaxBackups: 5,
 		MaxAge:     30, // Days
 		Compress:   true,
@@ -56,6 +56,7 @@ func newClient(cfg config.OvnAuthConfig, dbModel model.ClientDBModel, stopCh <-c
 	clientLog := log.New(ll, "", log.Ldate|log.Ltime|log.Lshortfile)
 	// clientLog.SetOutput(ll)
 
+	_ = stdr.SetVerbosity(4)
 	logger := stdr.New(clientLog)
 
 	options := []client.Option{
