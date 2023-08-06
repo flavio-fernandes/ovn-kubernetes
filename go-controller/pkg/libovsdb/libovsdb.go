@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -38,14 +39,16 @@ func newClient(cfg config.OvnAuthConfig, dbModel model.ClientDBModel, stopCh <-c
 
 	var logger logr.Logger
 
-	// TODO will be using flag for that
-	if false {
+	logggerFilename := config.Logging.LibovsdbFile
+	if len(logggerFilename) == 0 {
+		// Not using a separate log file for libovsdb client
 		logger = klogr.New()
 	} else {
-		// TODO will be using flag for that
-		logggerFilename := "/tmp/libovsdb.log"
-
 		// Sanity check: Make sure logger file can be opened
+		err := os.MkdirAll(filepath.Dir(logggerFilename), 0744)
+		if err != nil {
+			return nil, fmt.Errorf("making directories for logger file %s for libovsdb failed: %w", logggerFilename, err)
+		}
 		checkFile, err := os.OpenFile(logggerFilename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
 			return nil, fmt.Errorf("opening logger file %s for libovsdb failed: %w", logggerFilename, err)
@@ -53,18 +56,17 @@ func newClient(cfg config.OvnAuthConfig, dbModel model.ClientDBModel, stopCh <-c
 		_ = checkFile.Close()
 
 		// Create the lumberjack logger, which will write to a rolling log file.
-		// TODO: expose these lumberjack parameters?
 		ll := &lumberjack.Logger{
 			Filename:   logggerFilename,
-			MaxSize:    50, // MB
-			MaxBackups: 5,
-			MaxAge:     30, // Days
+			MaxSize:    config.Logging.LogFileMaxSize, // MB
+			MaxBackups: config.Logging.LogFileMaxBackups,
+			MaxAge:     config.Logging.LogFileMaxAge, // Days
 			Compress:   true,
 		}
-		klog.Infof("libovsdb client using lumberjack %#v", ll)
+		klog.Infof("libovsdb client using log verbosity %d with lumberjack %#v", config.Logging.Level, ll)
 
 		clientLog := log.New(ll, "", log.Ldate|log.Ltime|log.Lshortfile)
-		_ = stdr.SetVerbosity(4)
+		_ = stdr.SetVerbosity(config.Logging.Level)
 		logger = stdr.New(clientLog)
 	}
 

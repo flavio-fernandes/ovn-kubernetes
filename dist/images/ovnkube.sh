@@ -1153,6 +1153,7 @@ ovn-master() {
     --logfile-maxsize=${ovnkube_logfile_maxsize} \
     --logfile-maxbackups=${ovnkube_logfile_maxbackups} \
     --logfile-maxage=${ovnkube_logfile_maxage} \
+    ${separate_libovsdb_log_flag} \
     ${hybrid_overlay_flags} \
     ${disable_snat_multiple_gws_flag} \
     ${disable_forwarding_flag} \
@@ -1358,6 +1359,7 @@ ovnkube-controller() {
     --logfile-maxsize=${ovnkube_logfile_maxsize} \
     --logfile-maxbackups=${ovnkube_logfile_maxbackups} \
     --logfile-maxage=${ovnkube_logfile_maxage} \
+    ${separate_libovsdb_log_flag} \
     ${hybrid_overlay_flags} \
     ${disable_snat_multiple_gws_flag} \
     ${empty_lb_events_flag} \
