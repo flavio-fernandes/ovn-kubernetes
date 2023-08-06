@@ -14,6 +14,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/go-logr/logr"
+	"github.com/go-logr/stdr"
 	"github.com/ovn-org/libovsdb/client"
 	"github.com/ovn-org/libovsdb/model"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
@@ -22,11 +24,9 @@ import (
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"gopkg.in/fsnotify/fsnotify.v1"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
-
-	"github.com/go-logr/stdr"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // newClient creates a new client object given the provided config
@@ -36,28 +36,37 @@ func newClient(cfg config.OvnAuthConfig, dbModel model.ClientDBModel, stopCh <-c
 	const connectTimeout time.Duration = types.OVSDBTimeout * 2
 	const inactivityTimeout time.Duration = types.OVSDBTimeout * 18
 
-	orig_logger := klogr.New()
+	var logger logr.Logger
 
-	// checkFile, err := os.OpenFile("/tmp/app.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
-	// if err != nil {
-	// 	fmt.Printf("error opening file: %v", err)
-	// 	os.Exit(1)
-	// }
-	// _ = checkFile.Close()
+	// TODO will be using flag for that
+	if false {
+		logger = klogr.New()
+	} else {
+		// TODO will be using flag for that
+		logggerFilename := "/tmp/libovsdb.log"
 
-	// Create the lumberjack logger, which will write to a rolling log file.
-	ll := &lumberjack.Logger{
-		Filename:   "/tmp/app.log",
-		MaxSize:    1, // MB
-		MaxBackups: 5,
-		MaxAge:     30, // Days
-		Compress:   true,
+		// Sanity check: Make sure logger file can be opened
+		checkFile, err := os.OpenFile(logggerFilename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			return nil, fmt.Errorf("opening logger file %s for libovsdb failed: %w", logggerFilename, err)
+		}
+		_ = checkFile.Close()
+
+		// Create the lumberjack logger, which will write to a rolling log file.
+		// TODO: expose these lumberjack parameters?
+		ll := &lumberjack.Logger{
+			Filename:   logggerFilename,
+			MaxSize:    50, // MB
+			MaxBackups: 5,
+			MaxAge:     30, // Days
+			Compress:   true,
+		}
+		klog.Infof("libovsdb client using lumberjack %#v", ll)
+
+		clientLog := log.New(ll, "", log.Ldate|log.Ltime|log.Lshortfile)
+		_ = stdr.SetVerbosity(4)
+		logger = stdr.New(clientLog)
 	}
-	clientLog := log.New(ll, "", log.Ldate|log.Ltime|log.Lshortfile)
-	// clientLog.SetOutput(ll)
-
-	_ = stdr.SetVerbosity(4)
-	logger := stdr.New(clientLog)
 
 	options := []client.Option{
 		// Reading and parsing the DB after reconnect at scale can (unsurprisingly)
@@ -66,16 +75,8 @@ func newClient(cfg config.OvnAuthConfig, dbModel model.ClientDBModel, stopCh <-c
 		// inactivity check on the ovsdb connection.
 		client.WithInactivityCheck(inactivityTimeout, connectTimeout, &backoff.ZeroBackOff{}),
 		client.WithLeaderOnly(true),
+		client.WithLogger(&logger),
 	}
-
-	if true {
-		klog.Infof("libovsdb client using lumberjack %#v", ll)
-		options = append(options, client.WithLogger(&logger))
-	} else {
-		klog.Infof("libovsdb client using klogr")
-		options = append(options, client.WithLogger(&orig_logger))
-	}
-
 	options = append(options, opts...)
 
 	for _, endpoint := range strings.Split(cfg.GetURL(), ",") {
