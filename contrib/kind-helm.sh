@@ -218,7 +218,7 @@ EOT
     # Add control-plane nodes based on OVN_HA status. If there are 2 or more worker nodes, use
     # 2 of them them to host databases instead of creating additional control plane nodes.
     echo "- role: control-plane" >> /tmp/kind.yaml  # Add a single control-plane node if not HA
-    if [ "$OVN_HA" == true ] && [ "$KIND_NUM_WORKER" -lt 2 ]; then
+    if [ "$OVN_HA" == true ]; then  # && [ "$KIND_NUM_WORKER" -lt 2 ]; then
         for i in {2..3}; do  # Have 3 control-plane nodes for HA
             echo "- role: control-plane" >> /tmp/kind.yaml
         done
@@ -244,14 +244,14 @@ EOT
     if [ "$OVN_HA" == true ]; then
       kubectl label nodes k8s.ovn.org/ovnkube-db=true --overwrite \
               -l node-role.kubernetes.io/control-plane
-      if [ "$KIND_NUM_WORKER" -ge 2 ]; then
-        for n in ovn-worker ovn-worker2; do
-            # We want OVN HA not Kubernetes HA
-            # leverage the kubeadm well-known label node-role.kubernetes.io/control-plane=
-            # to choose the nodes where ovn master components will be placed
-            kubectl label node "$n" k8s.ovn.org/ovnkube-db=true node-role.kubernetes.io/control-plane="" --overwrite
-        done
-      fi
+      # if [ "$KIND_NUM_WORKER" -ge 2 ]; then
+      #   for n in ovn-worker ovn-worker2; do
+      #       # We want OVN HA not Kubernetes HA
+      #       # leverage the kubeadm well-known label node-role.kubernetes.io/control-plane=
+      #       # to choose the nodes where ovn master components will be placed
+      #       kubectl label node "$n" k8s.ovn.org/ovnkube-db=true node-role.kubernetes.io/control-plane="" --overwrite
+      #   done
+      # fi
     fi
 
     # Remove taint, so control-plane nodes can also schedule regular pods
