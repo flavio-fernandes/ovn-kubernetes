@@ -534,6 +534,8 @@ func newInformerLister(oType reflect.Type, sharedInformer cache.SharedIndexInfor
 		return egressservicelister.NewEgressServiceLister(sharedInformer.GetIndexer()), nil
 	case IPAMClaimsType:
 		return ipamclaimslister.NewIPAMClaimLister(sharedInformer.GetIndexer()), nil
+	case NetworkQoSType:
+		return networkqoslister.NewNetworkQoSLister(sharedInformer.GetIndexer()), nil
 	case UserDefinedNetworkType:
 		return userdefinednetworklister.NewUserDefinedNetworkLister(sharedInformer.GetIndexer()), nil
 	case NetworkQoSType:
