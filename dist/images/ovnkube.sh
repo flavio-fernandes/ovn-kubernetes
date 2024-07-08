@@ -308,6 +308,9 @@ ovnkube_compact_mode_enable=${OVNKUBE_COMPACT_MODE_ENABLE:-false}
 ovn_northd_backoff_interval=${OVN_NORTHD_BACKOFF_INTERVAL:-"300"}
 # OVN_ENABLE_SVC_TEMPLATE_SUPPORT - enable svc template support
 ovn_enable_svc_template_support=${OVN_ENABLE_SVC_TEMPLATE_SUPPORT:-true}
+
+#OVN_NETWORK_QOS_ENABLE - enable network QoS for ovn-kubernetes
+ovn_network_qos_enable=${OVN_NETWORK_QOS_ENABLE:-false}
 # OVN_ENABLE_DNSNAMERESOLVER - enable dns name resolver support
 ovn_enable_dnsnameresolver=${OVN_ENABLE_DNSNAMERESOLVER:-false}
 
@@ -1259,6 +1262,12 @@ ovn-master() {
   fi
   echo "ovn_enable_svc_template_support_flag=${ovn_enable_svc_template_support_flag}"
 
+  network_qos_enabled_flag=
+  if [[ ${ovn_network_qos_enable} == "true" ]]; then
+	  network_qos_enabled_flag="--enable-network-qos"
+  fi
+  echo "network_qos_enabled_flag=${network_qos_enabled_flag}"
+
   init_node_flags=
   if [[ ${ovnkube_compact_mode_enable} == "true" ]]; then
     init_node_flags="--init-node ${K8S_NODE} --nodeport"
@@ -1309,6 +1318,7 @@ ovn-master() {
     ${ovn_v6_join_subnet_opt} \
     ${ovn_v6_masquerade_subnet_opt} \
     ${persistent_ips_enabled_flag} \
+    ${network_qos_enabled_flag} \
     ${ovn_enable_dnsnameresolver_flag} \
     --cluster-subnets ${net_cidr} --k8s-service-cidr=${svc_cidr} \
     --gateway-mode=${ovn_gateway_mode} ${ovn_gateway_opts} \
@@ -1555,6 +1565,12 @@ ovnkube-controller() {
   fi
   echo "ovn_enable_svc_template_support_flag=${ovn_enable_svc_template_support_flag}"
 
+  network_qos_enabled_flag=
+  if [[ ${ovn_network_qos_enable} == "true" ]]; then
+      network_qos_enabled_flag="--enable-network-qos"
+  fi
+  echo "network_qos_enabled_flag=${network_qos_enabled_flag}"
+
   ovn_enable_dnsnameresolver_flag=
   if [[ ${ovn_enable_dnsnameresolver} == "true" ]]; then
 	  ovn_enable_dnsnameresolver_flag="--enable-dns-name-resolver"
@@ -1591,6 +1607,7 @@ ovnkube-controller() {
     ${ovn_v4_masquerade_subnet_opt} \
     ${ovn_v6_join_subnet_opt} \
     ${ovn_v6_masquerade_subnet_opt} \
+    ${network_qos_enabled_flag} \
     ${ovn_enable_dnsnameresolver_flag} \
     --cluster-subnets ${net_cidr} --k8s-service-cidr=${svc_cidr} \
     --gateway-mode=${ovn_gateway_mode} \
@@ -1954,6 +1971,12 @@ ovnkube-controller-with-node() {
   fi
   echo "ovn_enable_svc_template_support_flag=${ovn_enable_svc_template_support_flag}"
 
+  network_qos_enabled_flag=
+  if [[ ${ovn_network_qos_enable} == "true" ]]; then
+      network_qos_enabled_flag="--enable-network-qos"
+  fi
+  echo "network_qos_enabled_flag=${network_qos_enabled_flag}"
+
   ovn_enable_dnsnameresolver_flag=
   if [[ ${ovn_enable_dnsnameresolver} == "true" ]]; then
 	  ovn_enable_dnsnameresolver_flag="--enable-dns-name-resolver"
@@ -2008,6 +2031,7 @@ ovnkube-controller-with-node() {
     ${routable_mtu_flag} \
     ${sflow_targets} \
     ${ssl_opts} \
+    ${network_qos_enabled_flag} \
     ${ovn_enable_dnsnameresolver_flag} \
     --cluster-subnets ${net_cidr} --k8s-service-cidr=${svc_cidr} \
     --export-ovs-metrics \
@@ -2184,6 +2208,12 @@ ovn-cluster-manager() {
   fi
   echo "empty_lb_events_flag=${empty_lb_events_flag}"
 
+  network_qos_enabled_flag=
+  if [[ ${ovn_network_qos_enable} == "true" ]]; then
+      network_qos_enabled_flag="--enable-network-qos"
+  fi
+  echo "network_qos_enabled_flag=${network_qos_enabled_flag}"
+
   ovn_enable_dnsnameresolver_flag=
   if [[ ${ovn_enable_dnsnameresolver} == "true" ]]; then
 	  ovn_enable_dnsnameresolver_flag="--enable-dns-name-resolver"
@@ -2214,6 +2244,7 @@ ovn-cluster-manager() {
     ${ovn_v6_masquerade_subnet_opt} \
     ${ovn_v4_transit_switch_subnet_opt} \
     ${ovn_v6_transit_switch_subnet_opt} \
+    ${network_qos_enabled_flag} \
     ${ovn_enable_dnsnameresolver_flag} \
     --cluster-subnets ${net_cidr} --k8s-service-cidr=${svc_cidr} \
     --host-network-namespace ${ovn_host_network_namespace} \
@@ -2528,6 +2559,12 @@ ovn-node() {
   fi
   echo "ovn_conntrack_zone_flag=${ovn_conntrack_zone_flag}"
 
+  network_qos_enabled_flag=
+  if [[ ${ovn_network_qos_enable} == "true" ]]; then
+      network_qos_enabled_flag="--enable-network-qos"
+  fi
+  echo "network_qos_enabled_flag=${network_qos_enabled_flag}"
+
   ovn_v4_masquerade_subnet_opt=
   if [[ -n ${ovn_v4_masquerade_subnet} ]]; then
       ovn_v4_masquerade_subnet_opt="--gateway-v4-masquerade-subnet=${ovn_v4_masquerade_subnet}"
@@ -2577,6 +2614,7 @@ ovn-node() {
         ${ovn_unprivileged_flag} \
         ${routable_mtu_flag} \
         ${sflow_targets} \
+        ${network_qos_enabled_flag} \
         --cluster-subnets ${net_cidr} --k8s-service-cidr=${svc_cidr} \
         --export-ovs-metrics \
         --gateway-mode=${ovn_gateway_mode} ${ovn_gateway_opts} \
