@@ -431,6 +431,9 @@ type OVNKubernetesFeatureConfig struct {
 	EnableDNSNameResolver        bool `gcfg:"enable-dns-name-resolver"`
 	EnableServiceTemplateSupport bool `gcfg:"enable-svc-template-support"`
 	EnableObservability          bool `gcfg:"enable-observability"`
+	// allow primary network managed by other CNIs, not to manage the default network by default
+	// only manage default network if a default NAD is created requesting ovn-k8s CNI
+	SecondaryCNI bool `gcfg:"secondary-cni"`
 }
 
 // GatewayMode holds the node gateway mode
@@ -1134,6 +1137,12 @@ var OVNK8sFeatureFlags = []cli.Flag{
 		Usage:       "Configure to use OVN sampling with ovn-kubernetes.",
 		Destination: &cliConfig.OVNKubernetesFeature.EnableObservability,
 		Value:       OVNKubernetesFeature.EnableObservability,
+	},
+	&cli.BoolFlag{
+		Name:        "secondary-cni",
+		Usage:       "Configure to use ovn-kubernetes as a secondary CNI.",
+		Destination: &cliConfig.OVNKubernetesFeature.SecondaryCNI,
+		Value:       OVNKubernetesFeature.SecondaryCNI,
 	},
 }
 

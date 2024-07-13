@@ -94,6 +94,7 @@ OVN_ENABLE_INTERCONNECT=
 OVN_ENABLE_OVNKUBE_IDENTITY="true"
 OVN_ENABLE_PERSISTENT_IPS=
 OVN_ENABLE_SVC_TEMPLATE_SUPPORT="true"
+OVN_SECONDARY_CNI_ENABLE=
 OVN_ENABLE_DNSNAMERESOLVER="false"
 OVN_NOHOSTSUBNET_LABEL=""
 OVN_DISABLE_REQUESTEDCHASSIS="false"
@@ -358,6 +359,9 @@ while [ "$1" != "" ]; do
   --enable-svc-template-support)
     OVN_ENABLE_SVC_TEMPLATE_SUPPORT=$VALUE
     ;;
+  --secondary-cni-enable)
+    OVN_SECONDARY_CNI_ENABLE=$VALUE
+    ;;
   --enable-dnsnameresolver)
     OVN_ENABLE_DNSNAMERESOLVER=$VALUE
     ;;
@@ -559,6 +563,9 @@ echo "ovn_enable_persistent_ips: ${ovn_enable_persistent_ips}"
 ovn_enable_svc_template_support=${OVN_ENABLE_SVC_TEMPLATE_SUPPORT}
 echo "ovn_enable_svc_template_support: ${ovn_enable_svc_template_support}"
 
+ovn_secondary_cni_enable=${OVN_SECONDARY_CNI_ENABLE}
+echo "ovn_secondary_cni_enable: ${ovn_secondary_cni_enable}"
+
 ovn_enable_dnsnameresolver=${OVN_ENABLE_DNSNAMERESOLVER}
 echo "ovn_enable_dnsnameresolver: ${ovn_enable_dnsnameresolver}"
 
@@ -621,6 +628,7 @@ ovn_image=${ovnkube_image} \
   ovn_enable_multi_external_gateway=${ovn_enable_multi_external_gateway} \
   ovn_enable_ovnkube_identity=${ovn_enable_ovnkube_identity} \
   ovn_observ_enable=${ovn_observ_enable} \
+  ovn_secondary_cni_enable=${ovn_secondary_cni_enable} \
   ovnkube_app_name=ovnkube-node \
   jinjanate ../templates/ovnkube-node.yaml.j2 -o ${output_dir}/ovnkube-node.yaml
 
@@ -674,6 +682,7 @@ ovn_image=${ovnkube_image} \
   ovn_enable_multi_external_gateway=${ovn_enable_multi_external_gateway} \
   ovn_enable_ovnkube_identity=${ovn_enable_ovnkube_identity} \
   ovn_observ_enable=${ovn_observ_enable} \
+  ovn_secondary_cni_enable=${ovn_secondary_cni_enable} \
   ovnkube_app_name=ovnkube-node-dpu \
   jinjanate ../templates/ovnkube-node.yaml.j2 -o ${output_dir}/ovnkube-node-dpu.yaml
 
@@ -716,6 +725,7 @@ ovn_image=${image} \
   ovn_ex_gw_networking_interface=${ovn_ex_gw_networking_interface} \
   ovnkube_node_mgmt_port_netdev=${ovnkube_node_mgmt_port_netdev} \
   ovn_enable_ovnkube_identity=${ovn_enable_ovnkube_identity} \
+  ovn_secondary_cni_enable=${ovn_secondary_cni_enable} \
   ovnkube_app_name=ovnkube-node-dpu-host \
   jinjanate ../templates/ovnkube-node.yaml.j2 -o ${output_dir}/ovnkube-node-dpu-host.yaml
 
@@ -762,6 +772,7 @@ ovn_image=${ovnkube_image} \
   ovn_unprivileged_mode=${ovn_unprivileged_mode} \
   ovn_enable_multi_external_gateway=${ovn_enable_multi_external_gateway} \
   ovn_enable_ovnkube_identity=${ovn_enable_ovnkube_identity} \
+  ovn_secondary_cni_enable=${ovn_secondary_cni_enable} \
   ovn_enable_persistent_ips=${ovn_enable_persistent_ips} \
   ovn_enable_svc_template_support=${ovn_enable_svc_template_support} \
   ovn_enable_dnsnameresolver=${ovn_enable_dnsnameresolver} \
@@ -806,6 +817,7 @@ ovn_image=${ovnkube_image} \
   ovn_enable_interconnect=${ovn_enable_interconnect} \
   ovn_enable_multi_external_gateway=${ovn_enable_multi_external_gateway} \
   ovn_enable_ovnkube_identity=${ovn_enable_ovnkube_identity} \
+  ovn_secondary_cni_enable=${ovn_secondary_cni_enable} \
   ovn_v4_transit_switch_subnet=${ovn_v4_transit_switch_subnet} \
   ovn_v6_transit_switch_subnet=${ovn_v6_transit_switch_subnet} \
   ovn_enable_persistent_ips=${ovn_enable_persistent_ips} \
@@ -903,6 +915,7 @@ ovn_image=${ovnkube_image} \
   ovn_enable_interconnect=${ovn_enable_interconnect} \
   ovn_enable_multi_external_gateway=${ovn_enable_multi_external_gateway} \
   ovn_enable_ovnkube_identity=${ovn_enable_ovnkube_identity} \
+  ovn_secondary_cni_enable=${ovn_secondary_cni_enable} \
   ovn_northd_backoff_interval=${ovn_northd_backoff_interval} \
   ovn_enable_persistent_ips=${ovn_enable_persistent_ips} \
   ovn_enable_svc_template_support=${ovn_enable_svc_template_support} \
@@ -968,6 +981,7 @@ ovn_image=${ovnkube_image} \
   ovn_enable_interconnect=${ovn_enable_interconnect} \
   ovn_enable_multi_external_gateway=${ovn_enable_multi_external_gateway} \
   ovn_enable_ovnkube_identity=${ovn_enable_ovnkube_identity} \
+  ovn_secondary_cni_enable=${ovn_secondary_cni_enable} \
   ovn_northd_backoff_interval=${ovn_enable_backoff_interval} \
   ovn_enable_persistent_ips=${ovn_enable_persistent_ips} \
   ovn_enable_svc_template_support=${ovn_enable_svc_template_support} \

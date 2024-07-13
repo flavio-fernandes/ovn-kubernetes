@@ -272,6 +272,8 @@ spec:
           value: {{ hasKey .Values.global "enableSvcTemplate" | ternary .Values.global.enableSvcTemplate true | quote }}
         - name: OVN_NOHOSTSUBNET_LABEL
           value: {{ default "k8s.ovn.org/ovn-managed=false" .Values.global.noHostSubnetLabel | quote }}
+        - name: OVN_SECONDARY_CNI_ENABLE
+          value: {{ hasKey .Values.global "enableSecondaryCni" | ternary .Values.global.enableSecondaryCni false | quote }}
         - name: OVN_HOST_NETWORK_NAMESPACE
           valueFrom:
             configMapKeyRef:
