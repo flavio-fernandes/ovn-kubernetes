@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
@@ -103,4 +104,9 @@ func (c *Controller) clearNodeForNQOS(name string, nqosCache *networkQoSState, q
 // TODO...
 func (c *Controller) setNodeForNQOS(node *v1.Node, nqosCache *networkQoSState, queue workqueue.RateLimitingInterface) {
 	// TODO: Implement-me!
+}
+
+// isNodeInLocalZone returns whether the provided node is in a zone local to the zone controller
+func (c *Controller) isNodeInLocalZone(node *v1.Node) bool {
+	return util.GetNodeZone(node) == c.zone
 }

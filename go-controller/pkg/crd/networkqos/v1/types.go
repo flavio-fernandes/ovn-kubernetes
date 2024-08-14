@@ -94,7 +94,7 @@ type Classifier struct {
 	To []Destination `json:"to"`
 
 	// +optional
-	Ports Ports `json:"ports"`
+	Port Port `json:"port"`
 }
 
 // Bandwidth controls the maximum of rate traffic that can be sent
@@ -115,9 +115,9 @@ type Bandwidth struct {
 	Burst uint32 `json:"burst"`
 }
 
-// Ports specifies destination protocol and port on which NetworkQoS
+// Port specifies destination protocol and port on which NetworkQoS
 // rule is applied
-type Ports struct {
+type Port struct {
 	// protocol (tcp, udp, sctp) that the traffic must match.
 	// +kubebuilder:validation:Pattern=^TCP|UDP|SCTP$
 	// +optional

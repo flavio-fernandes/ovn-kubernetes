@@ -135,8 +135,10 @@ var AddressSetEgressService = newObjectIDsType(addressSet, EgressServiceOwnerTyp
 var AddressSetNetworkQoS = newObjectIDsType(addressSet, NetworkQoSOwnerType, []ExternalIDKey{
 	// nqos namespace:name
 	ObjectNameKey,
-	// gress rule's index
-	GressIdxKey,
+	// rule index
+	RuleIndex,
+	IpBlockIndexKey,
+	IPFamilyKey,
 })
 
 var ACLAdminNetworkPolicy = newObjectIDsType(acl, AdminNetworkPolicyOwnerType, []ExternalIDKey{
@@ -333,4 +335,10 @@ var QoSRuleEgressIP = newObjectIDsType(qos, EgressIPOwnerType, []ExternalIDKey{
 	ObjectNameKey,
 	// the IP Family for this policy, ip4 or ip6 or ip(dualstack)
 	IPFamilyKey,
+})
+
+var NetworkQoS = newObjectIDsType(qos, NetworkQoSOwnerType, []ExternalIDKey{
+	ObjectNameKey,
+	// rule index
+	RuleIndex,
 })

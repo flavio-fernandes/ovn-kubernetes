@@ -503,6 +503,7 @@ func (oc *DefaultNetworkController) newANPController() error {
 func (oc *DefaultNetworkController) newNetworkQoSController() error {
 	var err error
 	oc.nqosController, err = nqoscontroller.NewController(
+		oc.NetInfo,
 		DefaultNetworkControllerName,
 		oc.nbClient,
 		oc.kube.NetworkQoSClient,

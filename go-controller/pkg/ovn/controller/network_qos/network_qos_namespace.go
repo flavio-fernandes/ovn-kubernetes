@@ -75,7 +75,7 @@ func (c *Controller) syncNetworkQoSNamespace(key string) error {
 			if !loaded {
 				continue
 			}
-			c.clearNamespaceForNQOS(name, nqosObj, c.nqosQueue)
+			c.clearNamespaceForNQOS(name, nqosObj, c.nqosNamespaceQueue)
 		}
 		return nil
 	}
@@ -86,19 +86,55 @@ func (c *Controller) syncNetworkQoSNamespace(key string) error {
 		if !loaded {
 			continue
 		}
-		c.setNamespaceForNQOS(namespace, nqosObj, c.nqosQueue)
+		c.setNamespaceForNQOS(namespace, nqosObj, c.nqosNamespaceQueue)
 	}
 	return nil
 }
 
 // clearNamespaceForNQOS will handle the logic for figuring out if the provided namespace name
 // TODO...
-func (c *Controller) clearNamespaceForNQOS(name string, nqosCache *networkQoSState, queue workqueue.RateLimitingInterface) {
+func (c *Controller) clearNamespaceForNQOS(namespace string, nqosCache *networkQoSState, queue workqueue.RateLimitingInterface) {
 	// TODO: Implement-me!
+	for _, rule := range nqosCache.EgressRules {
+		if rule.Classifier == nil {
+			continue
+		}
+		for _, dest := range rule.Classifier.Destinations {
+			if err := dest.removePodsInNamespace(namespace); err != nil {
+				klog.Errorf("Failed to delete IPs from dest address set %s: %v", dest.DestAddrSet.GetName(), err)
+				queue.AddRateLimited(namespace)
+				return
+			}
+		}
+	}
 }
 
 // setNamespaceForNQOS will handle the logic for figuring out if the provided namespace name
 // TODO...
 func (c *Controller) setNamespaceForNQOS(namespace *v1.Namespace, nqosCache *networkQoSState, queue workqueue.RateLimitingInterface) {
 	// TODO: Implement-me!
+	for _, rule := range nqosCache.EgressRules {
+		if rule.Classifier == nil {
+			continue
+		}
+		for index, dest := range rule.Classifier.Destinations {
+			if !dest.matchNamespace(namespace, nqosCache.namespace) {
+				if dest.hasNamespace(namespace.Name) {
+					if err := dest.removePodsInNamespace(namespace.Name); err != nil {
+						klog.Errorf("Failed to remove pods in namespace %s from NetworkQoS %s/%s rule %d: %v", namespace.Name, nqosCache.namespace, nqosCache.name, index, err)
+						queue.AddRateLimited(namespace)
+						return
+					}
+				}
+				continue
+			}
+			// add matching pods in the namespace to dest
+			if err := dest.addPodsInNamespace(c, nqosCache.networkAttachmentName, namespace.Name); err != nil {
+				klog.Error(err)
+				queue.AddRateLimited(namespace.Name)
+				return
+			}
+			klog.V(5).Infof("Added pods in namespace %s for NetworkQoS %s/%s rule %d", namespace.Name, nqosCache.namespace, nqosCache.name, index)
+		}
+	}
 }

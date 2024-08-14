@@ -39,6 +39,7 @@ const (
 // Controller holds the fields required for NQOS controller
 // taken from k8s controller guidelines
 type Controller struct {
+	util.NetInfo
 	// name of the controller that starts the NQOS controller
 	// (values are default-network-controller, secondary-network-controller etc..)
 	controllerName string
@@ -85,6 +86,7 @@ type Controller struct {
 
 // NewController returns a new *Controller.
 func NewController(
+	netInfo util.NetInfo,
 	controllerName string,
 	nbClient libovsdbclient.Client,
 	nqosClient networkqosclientset.Interface,
@@ -98,6 +100,7 @@ func NewController(
 	recorder record.EventRecorder) (*Controller, error) {
 
 	c := &Controller{
+		NetInfo:                   netInfo,
 		controllerName:            controllerName,
 		nbClient:                  nbClient,
 		nqosClientSet:             nqosClient,
