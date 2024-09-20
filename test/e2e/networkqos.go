@@ -24,6 +24,7 @@ import (
 
 var _ = ginkgo.Describe("e2e NetworkQoS validation", func() {
 	const (
+		podImage       = "nicolaka/netshoot"
 		networkQoSYaml = "networkqos.yaml"
 		nqosSpecName   = "nqos-test-spec"
 		srcPodName     = "src-nqos-pod"
@@ -38,6 +39,8 @@ var _ = ginkgo.Describe("e2e NetworkQoS validation", func() {
 	)
 
 	var (
+		skipIpv4        bool
+		skipIpv6        bool
 		dstPodNamespace string
 		dstNode         string
 		dstPod1IPv4     string
@@ -76,14 +79,21 @@ var _ = ginkgo.Describe("e2e NetworkQoS validation", func() {
 		if nodeIP, ok := nodeAddresses["ipv4"]; ok {
 			_, ipnet, _ := net.ParseCIDR(nodeIP)
 			nodeIPv4Range = ipnet.String()
+			skipIpv4 = false
 		} else {
 			framework.Fail("Node IPv4 address not found")
+			ginkgo.By("Node IPv4 address not found: Will be skipping IPv4 checks in the Networking QoS test")
+			nodeIPv4Range = "0.0.0.0/0"
+			skipIpv4 = true
 		}
 		if nodeIP, ok := nodeAddresses["ipv6"]; ok {
 			_, ipnet, _ := net.ParseCIDR(nodeIP)
 			nodeIPv6Range = ipnet.String()
+			skipIpv6 = false
 		} else {
-			framework.Fail("Node IPv6 address not found")
+			ginkgo.By("Node IPv6 address not found: Will be skipping IPv6 checks in the Networking QoS test")
+			nodeIPv6Range = "::/0"
+			skipIpv6 = true
 		}
 		dstPodNamespace = f.Namespace.Name + "-dest"
 		// set up dest namespace
@@ -98,16 +108,23 @@ var _ = ginkgo.Describe("e2e NetworkQoS validation", func() {
 		_, err = f.ClientSet.CoreV1().Namespaces().Create(context.Background(), dstNs, metav1.CreateOptions{})
 		framework.ExpectNoError(err, "Error creating Namespace %v: %v", dstPodNamespace, err)
 
-		_, err = createPod(f, srcPodName, nodes.Items[0].Name, f.Namespace.Name, []string{"bash", "-c", "apk add iperf3; sleep infinity"}, map[string]string{"component": "nqos-test-src"})
+		_, err = createPod(f, srcPodName, nodes.Items[0].Name, f.Namespace.Name, []string{"bash", "-c", "sleep infinity"}, map[string]string{"component": "nqos-test-src"}, func(p *corev1.Pod) {
+			p.Spec.Containers[0].Image = podImage
+		})
 		framework.ExpectNoError(err)
 		dstNode = nodes.Items[1].Name
 	})
 
 	ginkgo.DescribeTable("Should have correct DSCP value for overlay traffic when NetworkQoS is applied",
-		func(tcpDumpTpl string, dst1IP, dst2IP, dst3IP, dst4IP *string) {
+		func(skipThisTableEntry *bool, tcpDumpTpl string, dst1IP, dst2IP, dst3IP, dst4IP *string) {
+			if *skipThisTableEntry {
+				return
+			}
 			dscpValue := 50
 			// dest pod without protocol and port
-			dstPod1, err := createPod(f, dstPod1Name, dstNode, dstPodNamespace, []string{"bash", "-c", "apk update; apk add tcpdump; sleep infinity"}, map[string]string{"component": "nqos-test-dst"})
+			dstPod1, err := createPod(f, dstPod1Name, dstNode, dstPodNamespace, []string{"bash", "-c", "sleep infinity"}, map[string]string{"component": "nqos-test-dst"}, func(p *corev1.Pod) {
+				p.Spec.Containers[0].Image = podImage
+			})
 			framework.ExpectNoError(err)
 			gomega.Eventually(func() error {
 				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "tcpdump")
@@ -117,27 +134,33 @@ var _ = ginkgo.Describe("e2e NetworkQoS validation", func() {
 			dstPod1IPv4, dstPod1IPv6 = getPodAddresses(dstPod1)
 
 			// dest pod covered by tcp without port rule
-			dstPod2, err := createPod(f, dstPod2Name, dstNode, dstPodNamespace, []string{"bash", "-c", "apk update; apk add tcpdump; nc -l -p 9090; sleep infinity"}, map[string]string{"component": "nqos-test-tcp"})
+			dstPod2, err := createPod(f, dstPod2Name, dstNode, dstPodNamespace, []string{"bash", "-c", "nc -l -p 9090; sleep infinity"}, map[string]string{"component": "nqos-test-tcp"}, func(p *corev1.Pod) {
+				p.Spec.Containers[0].Image = podImage
+			})
 			framework.ExpectNoError(err)
 			gomega.Eventually(func() error {
-				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "tcpdump")
+				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "nc")
 				return err
 
 			}, 60*time.Second, 1*time.Second).ShouldNot(gomega.HaveOccurred())
 			dstPod2IPv4, dstPod2IPv6 = getPodAddresses(dstPod2)
 
 			// dest pod covered by tcp with port rule
-			dstPod3, err := createPod(f, dstPod3Name, dstNode, dstPodNamespace, []string{"bash", "-c", "apk update; apk add tcpdump nginx; mkdir /run/nginx; nginx; sleep infinity"}, map[string]string{"component": "nqos-test-web"})
+			dstPod3, err := createPod(f, dstPod3Name, dstNode, dstPodNamespace, []string{"bash", "-c", "python3 -m http.server 80; sleep infinity"}, map[string]string{"component": "nqos-test-web"}, func(p *corev1.Pod) {
+				p.Spec.Containers[0].Image = podImage
+			})
 			framework.ExpectNoError(err)
 			gomega.Eventually(func() error {
-				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "tcpdump")
+				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "python3")
 				return err
 
 			}, 60*time.Second, 1*time.Second).ShouldNot(gomega.HaveOccurred())
 			dstPod3IPv4, dstPod3IPv6 = getPodAddresses(dstPod3)
 
 			// dest pod not covered by networkqos
-			dstPod4, err := createPod(f, dstPod4Name, dstNode, dstPodNamespace, []string{"bash", "-c", "apk update; apk add tcpdump; sleep infinity"}, nil)
+			dstPod4, err := createPod(f, dstPod4Name, dstNode, dstPodNamespace, []string{"bash", "-c", "sleep infinity"}, nil, func(p *corev1.Pod) {
+				p.Spec.Containers[0].Image = podImage
+			})
 			framework.ExpectNoError(err)
 			gomega.Eventually(func() error {
 				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "tcpdump")
@@ -217,16 +240,20 @@ spec:
 			netcatExpectDscp(f, srcPodName, dstPodNamespace, dstPod3Name, *dst3IP, tcpDumpTpl, 80, dscpValue+2)
 			pingExpectDscp(f, srcPodName, dstPodNamespace, dstPod4Name, *dst4IP, tcpDumpTpl, 0)
 		},
-		ginkgo.Entry("ipv4", tcpdumpIPv4, &dstPod1IPv4, &dstPod2IPv4, &dstPod3IPv4, &dstPod4IPv4),
-		ginkgo.Entry("ipv6", tcpdumpIPv6, &dstPod1IPv6, &dstPod2IPv6, &dstPod3IPv6, &dstPod4IPv6),
+		ginkgo.Entry("ipv4", &skipIpv4, tcpdumpIPv4, &dstPod1IPv4, &dstPod2IPv4, &dstPod3IPv4, &dstPod4IPv4),
+		ginkgo.Entry("ipv6", &skipIpv6, tcpdumpIPv6, &dstPod1IPv6, &dstPod2IPv6, &dstPod3IPv6, &dstPod4IPv6),
 	)
 
 	ginkgo.DescribeTable("Should have correct DSCP value for host network traffic when NetworkQoS is applied",
-		func(tcpDumpTpl string, dst1IP, dst2IP, dst3IP, dst4IP *string) {
+		func(skipThisTableEntry *bool, tcpDumpTpl string, dst1IP, dst2IP, dst3IP, dst4IP *string) {
+			if *skipThisTableEntry {
+				return
+			}
 			dscpValue := 32
 			// dest pod to test traffic without protocol and port
-			dstPod1, err := createPod(f, dstPod1Name, dstNode, dstPodNamespace, []string{"bash", "-c", "apk update; apk add tcpdump; sleep infinity"}, nil, func(p *corev1.Pod) {
+			dstPod1, err := createPod(f, dstPod1Name, dstNode, dstPodNamespace, []string{"bash", "-c", "sleep infinity"}, nil, func(p *corev1.Pod) {
 				p.Spec.HostNetwork = true
+				p.Spec.Containers[0].Image = podImage
 			})
 			framework.ExpectNoError(err)
 			gomega.Eventually(func() error {
@@ -237,31 +264,35 @@ spec:
 			dstPod1IPv4, dstPod1IPv6 = getPodAddresses(dstPod1)
 
 			// dest pod to test traffic with tcp protocol but no port
-			dstPod2, err := createPod(f, dstPod2Name, dstNode, dstPodNamespace, []string{"bash", "-c", "apk update; apk add tcpdump; nc -l -p 9090; sleep infinity"}, nil, func(p *corev1.Pod) {
+			dstPod2, err := createPod(f, dstPod2Name, dstNode, dstPodNamespace, []string{"bash", "-c", "nc -l -p 9090; sleep infinity"}, nil, func(p *corev1.Pod) {
 				p.Spec.HostNetwork = true
+				p.Spec.Containers[0].Image = podImage
 			})
 			framework.ExpectNoError(err)
 			gomega.Eventually(func() error {
-				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "tcpdump")
+				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "nc")
 				return err
 
 			}, 60*time.Second, 1*time.Second).ShouldNot(gomega.HaveOccurred())
 			dstPod2IPv4, dstPod2IPv6 = getPodAddresses(dstPod2)
 
 			// dest pod to test traffic with tcp protocol and port
-			dstPod3, err := createPod(f, dstPod3Name, dstNode, dstPodNamespace, []string{"bash", "-c", "apk update; apk add tcpdump nginx; mkdir /run/nginx; nginx; sleep infinity"}, nil, func(p *corev1.Pod) {
+			dstPod3, err := createPod(f, dstPod3Name, dstNode, dstPodNamespace, []string{"bash", "-c", "python3 -m http.server 80; sleep infinity"}, nil, func(p *corev1.Pod) {
 				p.Spec.HostNetwork = true
+				p.Spec.Containers[0].Image = podImage
 			})
 			framework.ExpectNoError(err)
 			gomega.Eventually(func() error {
-				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "tcpdump")
+				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "python3")
 				return err
 
 			}, 60*time.Second, 1*time.Second).ShouldNot(gomega.HaveOccurred())
 			dstPod3IPv4, dstPod3IPv6 = getPodAddresses(dstPod3)
 
 			// dest pod not covered by networkqos
-			dstPod4, err := createPod(f, dstPod4Name, dstNode, dstPodNamespace, []string{"bash", "-c", "apk update; apk add tcpdump; sleep infinity"}, nil)
+			dstPod4, err := createPod(f, dstPod4Name, dstNode, dstPodNamespace, []string{"bash", "-c", "sleep infinity"}, nil, func(p *corev1.Pod) {
+				p.Spec.Containers[0].Image = podImage
+			})
 			framework.ExpectNoError(err)
 			gomega.Eventually(func() error {
 				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "tcpdump")
@@ -335,15 +366,20 @@ spec:
 			netcatExpectDscp(f, srcPodName, dstPodNamespace, dstPod3Name, *dst3IP, tcpDumpTpl, 80, dscpValue+2)
 			pingExpectDscp(f, srcPodName, dstPodNamespace, dstPod4Name, *dst4IP, tcpDumpTpl, 0)
 		},
-		ginkgo.Entry("ipv4", tcpdumpIPv4, &dstPod1IPv4, &dstPod2IPv4, &dstPod3IPv4, &dstPod4IPv4),
-		ginkgo.Entry("ipv6", tcpdumpIPv6, &dstPod1IPv6, &dstPod2IPv6, &dstPod3IPv6, &dstPod4IPv6),
+		ginkgo.Entry("ipv4", &skipIpv4, tcpdumpIPv4, &dstPod1IPv4, &dstPod2IPv4, &dstPod3IPv4, &dstPod4IPv4),
+		ginkgo.Entry("ipv6", &skipIpv6, tcpdumpIPv6, &dstPod1IPv6, &dstPod2IPv6, &dstPod3IPv6, &dstPod4IPv6),
 	)
 
 	ginkgo.DescribeTable("Limits egress traffic to all target pods below the specified rate in NetworkQoS spec",
-		func(dst1IP, dst2IP *string) {
+		func(skipThisTableEntry *bool, dst1IP, dst2IP *string) {
+			if *skipThisTableEntry {
+				return
+			}
 			rate := 10000
 			// dest pod 1 for test without protocol & port
-			dstPod1, err := createPod(f, dstPod1Name, dstNode, dstPodNamespace, []string{"bash", "-c", "apk update; apk add iperf3; iperf3 -s"}, map[string]string{"component": "nqos-test-dst"})
+			dstPod1, err := createPod(f, dstPod1Name, dstNode, dstPodNamespace, []string{"bash", "-c", "iperf3 -s"}, map[string]string{"component": "nqos-test-dst"}, func(p *corev1.Pod) {
+				p.Spec.Containers[0].Image = podImage
+			})
 			framework.ExpectNoError(err)
 			gomega.Eventually(func() error {
 				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "iperf3")
@@ -352,7 +388,9 @@ spec:
 			}, 60*time.Second, 1*time.Second).ShouldNot(gomega.HaveOccurred())
 			dstPod1IPv4, dstPod1IPv6 = getPodAddresses(dstPod1)
 			// dest pod 2 for test without protocol & port
-			dstPod2, err := createPod(f, dstPod2Name, dstNode, dstPodNamespace, []string{"bash", "-c", "apk update; apk add iperf3; iperf3 -s"}, map[string]string{"component": "nqos-test-dst"})
+			dstPod2, err := createPod(f, dstPod2Name, dstNode, dstPodNamespace, []string{"bash", "-c", "iperf3 -s"}, map[string]string{"component": "nqos-test-dst"}, func(p *corev1.Pod) {
+				p.Spec.Containers[0].Image = podImage
+			})
 			framework.ExpectNoError(err)
 			gomega.Eventually(func() error {
 				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "iperf3")
@@ -403,15 +441,20 @@ spec:
 			bps = twoStreamIperf3Tests(f, srcPodName, *dst1IP, *dst2IP, 5201)
 			gomega.Expect(bps/1000 <= float64(rate)*bandwidthFluctuation).To(gomega.BeTrue())
 		},
-		ginkgo.Entry("ipv4", &dstPod1IPv4, &dstPod2IPv4),
-		ginkgo.Entry("ipv6", &dstPod1IPv6, &dstPod2IPv6),
+		ginkgo.Entry("ipv4", &skipIpv4, &dstPod1IPv4, &dstPod2IPv4),
+		ginkgo.Entry("ipv6", &skipIpv6, &dstPod1IPv6, &dstPod2IPv6),
 	)
 
 	ginkgo.DescribeTable("Limits egress traffic targeting an individual pod by protocol through a NetworkQoS spec",
-		func(dst1IP *string) {
+		func(skipThisTableEntry *bool, dst1IP *string) {
+			if *skipThisTableEntry {
+				return
+			}
 			rate := 5000
 			// dest pod for test with protocol
-			dstPod1, err := createPod(f, dstPod1Name, dstNode, dstPodNamespace, []string{"bash", "-c", "apk update; apk add iperf3; iperf3 -s"}, map[string]string{"component": "nqos-test-tcp"})
+			dstPod1, err := createPod(f, dstPod1Name, dstNode, dstPodNamespace, []string{"bash", "-c", "iperf3 -s"}, map[string]string{"component": "nqos-test-tcp"}, func(p *corev1.Pod) {
+				p.Spec.Containers[0].Image = podImage
+			})
 			framework.ExpectNoError(err)
 			gomega.Eventually(func() error {
 				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "iperf3")
@@ -463,15 +506,20 @@ spec:
 			bps = iperf3Test(f, srcPodName, *dst1IP, 5201)
 			gomega.Expect(bps/1000 <= float64(rate)*bandwidthFluctuation).To(gomega.BeTrue())
 		},
-		ginkgo.Entry("ipv4", &dstPod1IPv4),
-		ginkgo.Entry("ipv6", &dstPod1IPv6),
+		ginkgo.Entry("ipv4", &skipIpv4, &dstPod1IPv4),
+		ginkgo.Entry("ipv6", &skipIpv6, &dstPod1IPv6),
 	)
 
 	ginkgo.DescribeTable("Limits egress traffic targeting a pod by protocol and port through a NetworkQoS spec",
-		func(dst1IP *string) {
+		func(skipThisTableEntry *bool, dst1IP *string) {
+			if *skipThisTableEntry {
+				return
+			}
 			rate := 5000
 			// dest pod for test with protocol and port
-			dstPod1, err := createPod(f, dstPod1Name, dstNode, dstPodNamespace, []string{"bash", "-c", "apk update; apk add iperf3; iperf3 -s -p 80"}, map[string]string{"component": "nqos-test-proto-and-port"})
+			dstPod1, err := createPod(f, dstPod1Name, dstNode, dstPodNamespace, []string{"bash", "-c", "iperf3 -s -p 80"}, map[string]string{"component": "nqos-test-proto-and-port"}, func(p *corev1.Pod) {
+				p.Spec.Containers[0].Image = podImage
+			})
 			framework.ExpectNoError(err)
 			gomega.Eventually(func() error {
 				_, err := e2ekubectl.RunKubectl(dstPodNamespace, "exec", dstPod1Name, "--", "which", "iperf3")
@@ -523,8 +571,8 @@ spec:
 			bps = iperf3Test(f, srcPodName, *dst1IP, 80)
 			gomega.Expect(bps/1000 <= float64(rate)*bandwidthFluctuation).To(gomega.BeTrue())
 		},
-		ginkgo.Entry("ipv4", &dstPod1IPv4),
-		ginkgo.Entry("ipv6", &dstPod1IPv6),
+		ginkgo.Entry("ipv4", &skipIpv4, &dstPod1IPv4),
+		ginkgo.Entry("ipv6", &skipIpv6, &dstPod1IPv6),
 	)
 
 	ginkgo.AfterEach(func() {
