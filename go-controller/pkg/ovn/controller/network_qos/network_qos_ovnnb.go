@@ -351,13 +351,13 @@ func (c *Controller) findStaleAddressSets(qosState *networkQoSState) ([]string, 
 			continue
 		}
 		if ruleIndex >= len(qosState.EgressRules) {
-			klog.Errorf("address set's rule-index %d exceeds total number of rules %d", ruleIndex, len(qosState.EgressRules))
+			klog.Errorf("Address set's rule-index %d exceeds total number of rules %d", ruleIndex, len(qosState.EgressRules))
 			staleAddressSets = append(staleAddressSets, addrset.GetName())
 			continue
 		}
 		rule := qosState.EgressRules[ruleIndex]
 		if rule.Classifier != nil && destIndex >= len(rule.Classifier.Destinations) {
-			klog.Errorf("address set's ip-block-index %d exceeds total number %d", destIndex, len(rule.Classifier.Destinations))
+			klog.Errorf("Address set's ip-block-index %d exceeds total number %d", destIndex, len(rule.Classifier.Destinations))
 			staleAddressSets = append(staleAddressSets, addrset.GetName())
 		}
 	}
