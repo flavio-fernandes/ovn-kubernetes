@@ -398,6 +398,9 @@ func SetNodeManagementPortAnnotation(nodeAnnotator kube.Annotator, PfId int, Fun
 		PfId:   PfId,
 		FuncId: FuncId,
 	}
+
+	updateNodeMgmtPortInfoFunctionDefaultNetworkAnnotation(nodeAnnotator, &mgmtPortDetails)
+
 	bytes, err := json.Marshal(mgmtPortDetails)
 	if err != nil {
 		return fmt.Errorf("failed to marshal mgmtPortDetails with PfId '%v', FuncId '%v'", PfId, FuncId)
@@ -483,6 +486,8 @@ func updateNodeManagementPortMACAddressesAnnotation(annotations map[string]strin
 	} else {
 		delete(macAddressMap, netName)
 	}
+
+	updateNodeMgmtPortInfoMACAddressesAnnotation(annotations, macAddressMap)
 
 	// if no networks left, just delete the network ids annotation from node annotations.
 	if len(macAddressMap) == 0 {

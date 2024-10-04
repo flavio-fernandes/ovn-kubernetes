@@ -62,6 +62,8 @@ func updateSubnetAnnotation(annotations map[string]string, annotationName, netNa
 		delete(subnetsMap, netName)
 	}
 
+	updateNodeMgmtPortInfoSubnetAnnotation(annotations, subnetsMap)
+
 	// if no host subnet left, just delete the host subnet annotation from node annotations.
 	if len(subnetsMap) == 0 {
 		delete(annotations, annotationName)
