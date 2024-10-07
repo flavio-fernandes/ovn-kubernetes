@@ -62,6 +62,21 @@ const (
 	// OvnNodeManagementPort is the constant string representing the annotation key
 	OvnNodeManagementPort = "k8s.ovn.org/node-mgmt-port"
 
+	// OvnNodeManagementPortInfo contains all ips, mac addresses and mgmt ports
+	// on all networks keyed by the network-name
+	// k8s.ovn.org/node-mgmt-port-info: {
+	// 		"default": {
+	// 			"ip-addresses": [ "10.192.13.2/26" ],
+	// 			"mac-address": "ca:53:88:23:bc:98",
+	// 			"function-info": { "PfId": 0, "FuncId": 0 }
+	//      },
+	// 		"l2-network": {
+	// 			"ip-addresses": [ "10.200.10.2/26" ],
+	// 			"mac-address": "5e:52:2a:c0:98:f4"
+	//      }
+	// }
+	OvnNodeManagementPortInfo = "k8s.ovn.org/node-mgmt-port-info"
+
 	// OvnNodeManagementPortMacAddresses contains all mac addresses of the management ports
 	// on all networks keyed by the network-name
 	// k8s.ovn.org/node-mgmt-port-mac-addresses: {
@@ -487,7 +502,7 @@ func updateNodeManagementPortMACAddressesAnnotation(annotations map[string]strin
 	// if no networks left, just delete the network ids annotation from node annotations.
 	if len(macAddressMap) == 0 {
 		delete(annotations, OvnNodeManagementPortMacAddresses)
-		return nil
+		return updateNodeMgmtPortInfoMACAddressesAnnotation(netName, "", annotations)
 	}
 
 	// Marshal all network ids back to annotations.
@@ -495,8 +510,9 @@ func updateNodeManagementPortMACAddressesAnnotation(annotations map[string]strin
 	if err != nil {
 		return err
 	}
-	annotations[OvnNodeManagementPortMacAddresses] = string(bytes)
-	return nil
+	macAddresses := string(bytes)
+	annotations[OvnNodeManagementPortMacAddresses] = macAddresses
+	return updateNodeMgmtPortInfoMACAddressesAnnotation(netName, macAddresses, annotations)
 }
 
 // UpdateNodeManagementPortMACAddresses used only from unit tests
@@ -1454,3 +1470,41 @@ func GetNetworkID(nodes []*corev1.Node, nInfo BasicNetInfo) (int, error) {
 	}
 	return InvalidNetworkID, fmt.Errorf("missing network id for network '%s'", nInfo.GetNetworkName())
 }
+
+type ManagementPortInfo struct {
+	IpAddresses  string                `json:"ip-addresses,omitempty"`
+	MacAddress   string                `json:"mac-address,omitempty"`
+	FunctionInfo ManagementPortDetails `json:"function-info,omitempty"`
+}
+
+func updateNodeMgmtPortInfoIpAddresses(netName string, hostSubnets []*net.IPNet, annotations map[string]string) error {
+	return nil
+}
+
+func SetNodeMgmtPortInfoFunctionNetworkAnnotation(netName string, pfindex, vfindex int, node *kapi.Node, nodeAnnotator kube.Annotator) error {
+	return nil
+}
+
+func updateNodeMgmtPortInfoMACAddressesAnnotation(netName, macAddresses string, annotations map[string]string) error {
+	return nil
+}
+
+// func GetNodeManagementIfAddr(subnet *net.IPNet) *net.IPNet {
+
+// func xx() error {
+// 		// Marshal all host subnets of all networks back to annotations.
+// 		subnetsStrMap := make(map[string][]string)
+// 		for n, subnets := range subnetsMap {
+// 			subnetsStr := make([]string, len(subnets))
+// 			for i, subnet := range subnets {
+// 				subnetsStr[i] = subnet.String()
+// 			}
+// 			subnetsStrMap[n] = subnetsStr
+// 		}
+// 		bytes, err = json.Marshal(subnetsStrMap)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		annotations[annotationName] = string(bytes)
+// 		return nil
+// }
