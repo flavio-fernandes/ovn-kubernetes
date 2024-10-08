@@ -241,6 +241,18 @@ func (udng *UserDefinedNetworkGateway) AddNetwork() error {
 	if err := util.UpdateNodeManagementPortMACAddressesWithRetry(udng.node, udng.nodeLister, udng.kubeInterface, macAddress, udng.GetNetworkName()); err != nil {
 		return fmt.Errorf("unable to update mac address annotation for node %s, for network %s, err: %w", udng.node.Name, udng.GetNetworkName(), err)
 	}
+	networkLocalSubnets, err := util.ParseNodeHostSubnetAnnotation(udng.node, udng.GetNetworkName())
+	if err != nil {
+		// Expect this to happen if network is not layer 3
+		if !util.IsAnnotationNotSetError(err) {
+			return fmt.Errorf("unable to obtain subnet annotation for node %s on network %s: %w",
+				udng.node.Name, udng.GetNetworkName(), err)
+		}
+	} else {
+		if err = util.UpdateNodeManagementPortIPddressesWithRetry(udng.node, udng.nodeLister, udng.kubeInterface, networkLocalSubnets, udng.GetNetworkName()); err != nil {
+			return fmt.Errorf("unable to update ip address annotation for node %s, for network %s, err: %w", udng.node.Name, udng.GetNetworkName(), err)
+		}
+	}
 	// create the iprules for this network
 	udnReplyIPRules, err := udng.constructUDNVRFIPRules(vrfTableId)
 	if err != nil {
@@ -413,6 +425,10 @@ func (udng *UserDefinedNetworkGateway) deleteUDNManagementPort() error {
 	// sending nil mac address will delete the network's annotation value
 	if err := util.UpdateNodeManagementPortMACAddressesWithRetry(udng.node, udng.nodeLister, udng.kubeInterface, nil, udng.GetNetworkName()); err != nil {
 		return fmt.Errorf("unable to remove mac address annotation for node %s, for network %s, err: %v", udng.node.Name, udng.GetNetworkName(), err)
+	}
+	// sending nil ip address will delete the network's annotation value
+	if err = util.UpdateNodeManagementPortIPddressesWithRetry(udng.node, udng.nodeLister, udng.kubeInterface, nil, udng.GetNetworkName()); err != nil {
+		return fmt.Errorf("unable to remove ip address annotation for node %s, for network %s, err: %w", udng.node.Name, udng.GetNetworkName(), err)
 	}
 	klog.V(3).Infof("Removed management port mac address information of %s for network %s", interfaceName, udng.GetNetworkName())
 	return nil
