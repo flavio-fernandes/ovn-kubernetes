@@ -615,13 +615,6 @@ func createNodeManagementPorts(node *kapi.Node, nodeLister listers.NodeLister, n
 		if err != nil {
 			return nil, nil, err
 		}
-	} else {
-		// REMOVE THIS!
-		pfindex, vfindex := 99, 99
-		err = util.SetNodeMgmtPortInfoFunctionNetworkAnnotation(types.DefaultNetworkName, pfindex, vfindex, node, nodeAnnotator)
-		if err != nil {
-			return nil, nil, err
-		}
 	}
 	ports := NewManagementPorts(node.Name, subnets, netdevName, rep)
 

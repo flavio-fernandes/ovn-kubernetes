@@ -512,7 +512,7 @@ func updateNodeManagementPortMACAddressesAnnotation(annotations map[string]strin
 	}
 	macAddresses := string(bytes)
 	annotations[OvnNodeManagementPortMacAddresses] = macAddresses
-	return updateNodeMgmtPortInfoMACAddressesAnnotation(netName, macAddressMap[netName], annotations)
+	return updateNodeMgmtPortInfoMACAddressesAnnotation(netName, macAddress.String(), annotations)
 }
 
 // UpdateNodeManagementPortMACAddresses used only from unit tests
@@ -1478,7 +1478,31 @@ type ManagementPortInfo struct {
 }
 
 func SetNodeMgmtPortInfoFunctionNetworkAnnotation(netName string, pfindex, vfindex int, node *kapi.Node, nodeAnnotator kube.Annotator) error {
-	return nil
+	mgmtPortInfoMap, err := parseNodeMgmtPortInfoAnnotation(node.Annotations)
+	if err != nil {
+		return fmt.Errorf("failed to decode ManagementPortInfo for IpAddresses: %w", err)
+	}
+
+	functionInfo := &ManagementPortDetails{PfId: pfindex, FuncId: vfindex}
+
+	// Check if the netName already exists in the map
+	if mgmtPortInfo, exists := mgmtPortInfoMap[netName]; exists {
+		mgmtPortInfo.FunctionInfo = functionInfo
+		mgmtPortInfoMap[netName] = mgmtPortInfo
+	} else {
+		// If netName doesn't exist and there are IP addresses to set, create a new entry
+		mgmtPortInfoMap[netName] = ManagementPortInfo{
+			FunctionInfo: functionInfo,
+		}
+	}
+
+	// Encode the updated map back to JSON
+	bytes, err := encodeNodeMgmtPortInfoAnnotation(mgmtPortInfoMap)
+	if err != nil {
+		return fmt.Errorf("failed to encode ManagementPortInfo: %w", err)
+	}
+
+	return nodeAnnotator.Set(OvnNodeManagementPortInfo, bytes)
 }
 
 func updateNodeMgmtPortInfoIpAddresses(netName string, hostSubnets []*net.IPNet, annotations map[string]string) error {
