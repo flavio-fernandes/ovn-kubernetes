@@ -1477,34 +1477,126 @@ type ManagementPortInfo struct {
 	FunctionInfo ManagementPortDetails `json:"function-info,omitempty"`
 }
 
-func updateNodeMgmtPortInfoIpAddresses(netName string, hostSubnets []*net.IPNet, annotations map[string]string) error {
-	return nil
-}
-
 func SetNodeMgmtPortInfoFunctionNetworkAnnotation(netName string, pfindex, vfindex int, node *kapi.Node, nodeAnnotator kube.Annotator) error {
 	return nil
 }
 
-func updateNodeMgmtPortInfoMACAddressesAnnotation(netName, macAddresses string, annotations map[string]string) error {
+func updateNodeMgmtPortInfoIpAddresses(netName string, hostSubnets []*net.IPNet, annotations map[string]string) error {
+	mgmtPortInfoMap, err := parseNodeMgmtPortInfoAnnotation(annotations)
+	if err != nil {
+		return err
+	}
+
+	// Convert IPNet slice into a string slice of CIDRs
+	ipAddressesStr := make([]string, len(hostSubnets))
+	for i, hostSubnet := range hostSubnets {
+		ipNet := GetNodeManagementIfAddr(hostSubnet) // Get the IPNet representation
+		ipAddressesStr[i] = ipNet.String()           // Convert IPNet to CIDR string
+	}
+
+	// Only marshal the IP addresses if there are any
+	var ipAddressesJson string
+	if len(ipAddressesStr) > 0 {
+		// Marshal the slice of CIDRs into a JSON string
+		ipBytes, err := json.Marshal(ipAddressesStr)
+		if err != nil {
+			return fmt.Errorf("failed to marshal IP addresses: %w", err)
+		}
+		ipAddressesJson = string(ipBytes)
+	}
+
+	// Check if the netName already exists in the map
+	if mgmtPortInfo, exists := mgmtPortInfoMap[netName]; exists {
+		// Update the IpAddresses for the specified netName
+		mgmtPortInfo.IpAddresses = ipAddressesJson
+
+		// Check if the netName should be deleted based on conditions
+		if shouldDeleteNetNameFromInfoMap(netName, mgmtPortInfo) {
+			// Remove the key if all conditions in shouldDeleteNetNameFromInfoMap are met
+			delete(mgmtPortInfoMap, netName)
+		} else {
+			// Otherwise, update the map with new IpAddresses
+			mgmtPortInfoMap[netName] = mgmtPortInfo
+		}
+	} else if len(ipAddressesStr) > 0 {
+		// If netName doesn't exist and there are IP addresses to set, create a new entry
+		mgmtPortInfoMap[netName] = ManagementPortInfo{
+			IpAddresses: ipAddressesJson,
+		}
+	}
+
+	// Encode the updated map back to JSON
+	bytes, err := encodeNodeMgmtPortInfoAnnotation(mgmtPortInfoMap)
+	if err != nil {
+		return fmt.Errorf("failed to encode ManagementPortInfo: %w", err)
+	}
+
+	// Set the JSON-encoded string back into the annotations
+	annotations[OvnNodeManagementPortInfo] = bytes
 	return nil
 }
 
-// func GetNodeManagementIfAddr(subnet *net.IPNet) *net.IPNet {
+func updateNodeMgmtPortInfoMACAddressesAnnotation(netName, macAddress string, annotations map[string]string) error {
+	mgmtPortInfoMap, err := parseNodeMgmtPortInfoAnnotation(annotations)
+	if err != nil {
+		return err
+	}
 
-// func xx() error {
-// 		// Marshal all host subnets of all networks back to annotations.
-// 		subnetsStrMap := make(map[string][]string)
-// 		for n, subnets := range subnetsMap {
-// 			subnetsStr := make([]string, len(subnets))
-// 			for i, subnet := range subnets {
-// 				subnetsStr[i] = subnet.String()
-// 			}
-// 			subnetsStrMap[n] = subnetsStr
-// 		}
-// 		bytes, err = json.Marshal(subnetsStrMap)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		annotations[annotationName] = string(bytes)
-// 		return nil
-// }
+	// Check if the netName already exists in the map
+	if mgmtPortInfo, exists := mgmtPortInfoMap[netName]; exists {
+		// Update the MacAddress for the specified netName
+		mgmtPortInfo.MacAddress = macAddress
+		// Remove the key if macAddress is empty and no other data exists for this netName
+		if shouldDeleteNetNameFromInfoMap(netName, mgmtPortInfo) {
+			delete(mgmtPortInfoMap, netName)
+		} else {
+			mgmtPortInfoMap[netName] = mgmtPortInfo
+		}
+	} else if macAddress != "" {
+		// If netName doesn't exist and macAddress is not empty, initialize a new ManagementPortInfo entry
+		mgmtPortInfoMap[netName] = ManagementPortInfo{MacAddress: macAddress}
+	}
+
+	bytes, err := encodeNodeMgmtPortInfoAnnotation(mgmtPortInfoMap)
+	if err != nil {
+		return err
+	}
+	annotations[OvnNodeManagementPortInfo] = bytes
+	return nil
+}
+
+// ParseAnnotations parses the annotations map and returns a map of ManagementPortInfo
+func parseNodeMgmtPortInfoAnnotation(annotations map[string]string) (map[string]ManagementPortInfo, error) {
+	result := make(map[string]ManagementPortInfo)
+
+	// Check if the annotation exists
+	if value, ok := annotations[OvnNodeManagementPortInfo]; ok {
+		// Parse the JSON data into the result map
+		err := json.Unmarshal([]byte(value), &result)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse annotation %s: %w", OvnNodeManagementPortInfo, err)
+		}
+	}
+
+	return result, nil
+}
+
+// SetManagementPortInfo sets the JSON encoded ManagementPortInfo to the annotations map
+func encodeNodeMgmtPortInfoAnnotation(info map[string]ManagementPortInfo) (string, error) {
+	// JSON encode the map
+	jsonData, err := json.Marshal(info)
+	if err != nil {
+		return "", fmt.Errorf("failed to encode ManagementPortInfo: %w", err)
+	}
+	return string(jsonData), nil
+}
+
+// shouldDeleteNetName determines if a ManagementPortInfo should be removed based on the conditions.
+func shouldDeleteNetNameFromInfoMap(netName string, mgmtPortInfo ManagementPortInfo) bool {
+	// Check if netName is not the default network name and the macAddress is empty
+	// Also check if the other fields in mgmtPortInfo are empty (IpAddresses and FunctionInfo)
+	return netName != types.DefaultNetworkName &&
+		mgmtPortInfo.MacAddress == "" &&
+		len(mgmtPortInfo.IpAddresses) == 0 &&
+		mgmtPortInfo.FunctionInfo == (ManagementPortDetails{})
+}
