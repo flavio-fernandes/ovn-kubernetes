@@ -69,24 +69,24 @@ type Controller struct {
 	nqosCache *syncmap.SyncMap[*networkQoSState]
 
 	// queues for the CRDs where incoming work is placed to de-dup
-	nqosQueue workqueue.RateLimitingInterface
+	nqosQueue workqueue.TypedRateLimitingInterface[string]
 	// cached access to nqos objects
 	nqosLister      networkqoslister.NetworkQoSLister
 	nqosCacheSynced cache.InformerSynced
 	// namespace queue, cache, lister
 	nqosNamespaceLister corev1listers.NamespaceLister
 	nqosNamespaceSynced cache.InformerSynced
-	nqosNamespaceQueue  workqueue.RateLimitingInterface
+	nqosNamespaceQueue  workqueue.TypedRateLimitingInterface[string]
 	// pod queue, cache, lister
 	nqosPodLister corev1listers.PodLister
 	nqosPodSynced cache.InformerSynced
-	nqosPodQueue  workqueue.RateLimitingInterface
+	nqosPodQueue  workqueue.TypedRateLimitingInterface[string]
 	// nad lister, only valid for default network controller when multi-network is enabled
 	nadLister nadlister.NetworkAttachmentDefinitionLister
 	// node queue, cache, lister
 	nqosNodeLister corev1listers.NodeLister
 	nqosNodeSynced cache.InformerSynced
-	nqosNodeQueue  workqueue.RateLimitingInterface
+	nqosNodeQueue  workqueue.TypedRateLimitingInterface[string]
 }
 
 // NewController returns a new *Controller.
@@ -121,9 +121,9 @@ func NewController(
 	// setup nqos informers, listers, queue
 	c.nqosLister = nqosInformer.Lister()
 	c.nqosCacheSynced = nqosInformer.Informer().HasSynced
-	c.nqosQueue = workqueue.NewNamedRateLimitingQueue(
-		workqueue.NewItemFastSlowRateLimiter(1*time.Second, 5*time.Second, 5),
-		"networkQoS",
+	c.nqosQueue = workqueue.NewTypedRateLimitingQueueWithConfig(
+		workqueue.NewTypedItemFastSlowRateLimiter[string](1*time.Second, 5*time.Second, 5),
+		workqueue.TypedRateLimitingQueueConfig[string]{Name: "networkQoS"},
 	)
 	_, err := nqosInformer.Informer().AddEventHandler(factory.WithUpdateHandlingForObjReplace(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.onNQOSAdd,
@@ -137,9 +137,9 @@ func NewController(
 	klog.V(5).Info("Setting up event handlers for Namespaces in Network QoS controller")
 	c.nqosNamespaceLister = namespaceInformer.Lister()
 	c.nqosNamespaceSynced = namespaceInformer.Informer().HasSynced
-	c.nqosNamespaceQueue = workqueue.NewNamedRateLimitingQueue(
-		workqueue.NewItemFastSlowRateLimiter(1*time.Second, 5*time.Second, 5),
-		"nqosNamespaces",
+	c.nqosNamespaceQueue = workqueue.NewTypedRateLimitingQueueWithConfig(
+		workqueue.NewTypedItemFastSlowRateLimiter[string](1*time.Second, 5*time.Second, 5),
+		workqueue.TypedRateLimitingQueueConfig[string]{Name: "nqosNamespaces"},
 	)
 	_, err = namespaceInformer.Informer().AddEventHandler(factory.WithUpdateHandlingForObjReplace(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.onNQOSNamespaceAdd,
@@ -153,9 +153,9 @@ func NewController(
 	klog.V(5).Info("Setting up event handlers for Pods in Network QoS controller")
 	c.nqosPodLister = podInformer.Lister()
 	c.nqosPodSynced = podInformer.Informer().HasSynced
-	c.nqosPodQueue = workqueue.NewNamedRateLimitingQueue(
-		workqueue.NewItemFastSlowRateLimiter(1*time.Second, 5*time.Second, 5),
-		"nqosPods",
+	c.nqosPodQueue = workqueue.NewTypedRateLimitingQueueWithConfig(
+		workqueue.NewTypedItemFastSlowRateLimiter[string](1*time.Second, 5*time.Second, 5),
+		workqueue.TypedRateLimitingQueueConfig[string]{Name: "nqosPods"},
 	)
 	_, err = podInformer.Informer().AddEventHandler(factory.WithUpdateHandlingForObjReplace(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.onNQOSPodAdd,
@@ -169,9 +169,9 @@ func NewController(
 	klog.V(5).Info("Setting up event handlers for Nodes in Network QoS controller")
 	c.nqosNodeLister = nodeInformer.Lister()
 	c.nqosNodeSynced = podInformer.Informer().HasSynced
-	c.nqosNodeQueue = workqueue.NewNamedRateLimitingQueue(
-		workqueue.NewItemFastSlowRateLimiter(1*time.Second, 5*time.Second, 5),
-		"nqosNodes",
+	c.nqosNodeQueue = workqueue.NewTypedRateLimitingQueueWithConfig(
+		workqueue.NewTypedItemFastSlowRateLimiter[string](1*time.Second, 5*time.Second, 5),
+		workqueue.TypedRateLimitingQueueConfig[string]{Name: "nqosNodes"},
 	)
 	_, err = nodeInformer.Informer().AddEventHandler(factory.WithUpdateHandlingForObjReplace(cache.ResourceEventHandlerFuncs{
 		UpdateFunc: c.onNQOSNodeUpdate,

@@ -23,7 +23,7 @@ func (c *Controller) processNextNQOSPodWorkItem(wg *sync.WaitGroup) bool {
 		return false
 	}
 	defer c.nqosPodQueue.Done(nqosPodKey)
-	err := c.syncNetworkQoSPod(nqosPodKey.(string))
+	err := c.syncNetworkQoSPod(nqosPodKey)
 	if err == nil {
 		c.nqosPodQueue.Forget(nqosPodKey)
 		return true

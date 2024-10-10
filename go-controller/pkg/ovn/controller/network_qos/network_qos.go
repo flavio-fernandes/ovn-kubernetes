@@ -12,8 +12,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 
 	networkqosapi "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/networkqos/v1"
 	nqosapiapply "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/networkqos/v1/apis/applyconfiguration/networkqos/v1"
@@ -29,7 +31,7 @@ func (c *Controller) processNextNQOSWorkItem(wg *sync.WaitGroup) bool {
 	}
 	defer c.nqosQueue.Done(nqosKey)
 
-	err := c.syncNetworkQoS(nqosKey.(string))
+	err := c.syncNetworkQoS(nqosKey)
 	if err == nil {
 		c.nqosQueue.Forget(nqosKey)
 		return true
@@ -248,20 +250,22 @@ func (c *Controller) updateNQOStatusCondition(newCondition metav1.Condition, nam
 	if err != nil {
 		return err
 	}
-	existingCondition := meta.FindStatusCondition(nqos.Status.Conditions, newCondition.Type)
-	if existingCondition == nil {
-		newCondition.LastTransitionTime = metav1.NewTime(time.Now())
-	} else {
-		if existingCondition.Status != newCondition.Status {
-			existingCondition.Status = newCondition.Status
-			existingCondition.LastTransitionTime = metav1.NewTime(time.Now())
-		}
-		existingCondition.Reason = newCondition.Reason
-		existingCondition.Message = newCondition.Message
-		newCondition = *existingCondition
+
+	newConditionApply := &metaapplyv1.ConditionApplyConfiguration{
+		Type:               &newCondition.Type,
+		Status:             &newCondition.Status,
+		ObservedGeneration: &newCondition.ObservedGeneration,
+		Reason:             &newCondition.Reason,
+		Message:            &newCondition.Message,
 	}
+
+	existingCondition := meta.FindStatusCondition(nqos.Status.Conditions, newCondition.Type)
+	if existingCondition == nil || existingCondition.Status != newCondition.Status {
+		newConditionApply.LastTransitionTime = ptr.To(metav1.NewTime(time.Now()))
+	}
+
 	applyObj := nqosapiapply.NetworkQoS(name, namespace).
-		WithStatus(nqosapiapply.Status().WithConditions(newCondition))
+		WithStatus(nqosapiapply.Status().WithConditions(newConditionApply))
 	_, err = c.nqosClientSet.K8sV1().NetworkQoSes(namespace).ApplyStatus(context.TODO(), applyObj, metav1.ApplyOptions{FieldManager: c.zone, Force: true})
 	return err
 }

@@ -23,7 +23,7 @@ func (c *Controller) processNextNQOSNodeWorkItem(wg *sync.WaitGroup) bool {
 		return false
 	}
 	defer c.nqosNodeQueue.Done(nqosNodeKey)
-	err := c.syncNetworkQoSNode(nqosNodeKey.(string))
+	err := c.syncNetworkQoSNode(nqosNodeKey)
 	if err == nil {
 		c.nqosNodeQueue.Forget(nqosNodeKey)
 		return true

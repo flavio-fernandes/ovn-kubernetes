@@ -20,7 +20,7 @@ func (c *Controller) processNextNQOSNamespaceWorkItem(wg *sync.WaitGroup) bool {
 	}
 	defer c.nqosNamespaceQueue.Done(nqosNSKey)
 
-	err := c.syncNetworkQoSNamespace(nqosNSKey.(string))
+	err := c.syncNetworkQoSNamespace(nqosNSKey)
 	if err == nil {
 		c.nqosNamespaceQueue.Forget(nqosNSKey)
 		return true
