@@ -2,6 +2,7 @@ package util
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -1475,6 +1476,10 @@ type ManagementPortInfo struct {
 }
 
 func updateNodeMgmtPortInfoIpAddresses(netName string, hostSubnets []*net.IPNet, annotations map[string]string) error {
+	if annotations == nil {
+		return errors.New("annotaions must not be nil")
+	}
+
 	mgmtPortInfoMap, err := parseNodeMgmtPortInfoAnnotation(annotations)
 	if err != nil {
 		return fmt.Errorf("failed to decode ManagementPortInfo for IpAddresses: %w", err)
