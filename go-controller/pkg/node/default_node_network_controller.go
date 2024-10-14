@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	nad "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/network-attach-def-controller"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	nad "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/network-attach-def-controller"
 
 	kapi "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
@@ -496,22 +495,22 @@ func handleNetdevResources(resourceName string) (string, error) {
 	return netdevice, nil
 }
 
-func exportManagementPortAnnotation(netdevName string, nodeAnnotator kube.Annotator) (int, int, error) {
+func exportManagementPortAnnotation(netdevName string, nodeAnnotator kube.Annotator) error {
 	klog.Infof("Exporting management port annotation for netdev '%v'", netdevName)
 	deviceID, err := util.GetDeviceIDFromNetdevice(netdevName)
 	if err != nil {
-		return 0, 0, err
+		return err
 	}
 	vfindex, err := util.GetSriovnetOps().GetVfIndexByPciAddress(deviceID)
 	if err != nil {
-		return 0, 0, err
+		return err
 	}
 	pfindex, err := util.GetSriovnetOps().GetPfIndexByVfPciAddress(deviceID)
 	if err != nil {
-		return 0, 0, err
+		return err
 	}
 
-	return pfindex, vfindex, util.SetNodeManagementPortAnnotation(nodeAnnotator, pfindex, vfindex)
+	return util.SetNodeManagementPortAnnotation(nodeAnnotator, pfindex, vfindex)
 }
 
 func importManagementPortAnnotation(node *kapi.Node) (string, error) {
@@ -607,11 +606,7 @@ func createNodeManagementPorts(node *kapi.Node, nodeLister listers.NodeLister, n
 	}
 
 	if config.OvnKubeNode.Mode == types.NodeModeDPUHost {
-		pfindex, vfindex, err := exportManagementPortAnnotation(netdevName, nodeAnnotator)
-		if err != nil {
-			return nil, nil, err
-		}
-		err = util.SetNodeMgmtPortInfoFunctionNetworkAnnotation(types.DefaultNetworkName, pfindex, vfindex, node, nodeAnnotator)
+		err := exportManagementPortAnnotation(netdevName, nodeAnnotator)
 		if err != nil {
 			return nil, nil, err
 		}

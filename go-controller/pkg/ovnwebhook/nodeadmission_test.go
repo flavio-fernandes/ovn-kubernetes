@@ -284,7 +284,7 @@ func TestNodeAdmission_ValidateUpdate(t *testing.T) {
 			newObj: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        nodeName,
-					Annotations: map[string]string{util.OvnNodeManagementPortInfo: `{"default":{"function-info":{"PfId":1,"FuncId":1}}}`},
+					Annotations: map[string]string{util.OvnNodeManagementPortInfo: `{"default":[1.2.3.4/24]}`},
 				},
 			},
 		},
