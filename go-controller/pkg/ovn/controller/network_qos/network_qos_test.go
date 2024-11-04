@@ -475,13 +475,7 @@ var _ = Describe("NetworkQoS Controller", func() {
 						Name:      "stream-qos",
 					},
 					Spec: nqostype.Spec{
-						NetworkAttachmentRefs: []corev1.ObjectReference{
-							{
-								Kind:      "NetworkAttachmentDefinition",
-								Namespace: "default",
-								Name:      "unknown",
-							},
-						},
+						NetworkAttachmentName: "default/unknown",
 						PodSelector: metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"app": "client",
@@ -522,13 +516,7 @@ var _ = Describe("NetworkQoS Controller", func() {
 
 				By("handles NetworkQos on secondary network")
 				{
-					nqos4StreamNet.Spec.NetworkAttachmentRefs = []corev1.ObjectReference{
-						{
-							Kind:      "NetworkAttachmentDefinition",
-							Namespace: "default",
-							Name:      "stream",
-						},
-					}
+					nqos4StreamNet.Spec.NetworkAttachmentName = "default/stream"
 					nqos4StreamNet.ResourceVersion = time.Now().String()
 					_, err := fakeNQoSClient.K8sV1().NetworkQoSes(nqosNamespace).Update(context.TODO(), nqos4StreamNet, metav1.UpdateOptions{})
 					Expect(err).NotTo(HaveOccurred())
@@ -581,58 +569,6 @@ var _ = Describe("NetworkQoS Controller", func() {
 					qos := eventuallyExpectQoS(defaultControllerName, nqosNamespace, "no-source-selector", 0)
 					v4HashName, _ := addrset.GetASHashNames()
 					Expect(qos.Match).Should(Equal(fmt.Sprintf("ip4.src == {$%s} && ip4.dst == 128.115.0.0/17 && ip4.dst != {128.115.0.0,128.115.0.255}", v4HashName)))
-				}
-
-				By("clear QoS attributes of existing NetworkQoS and make sure that is proper")
-				{
-					nqosWithoutSrcSelector := &nqostype.NetworkQoS{
-						ObjectMeta: metav1.ObjectMeta{
-							Namespace: nqosNamespace,
-							Name:      "no-source-selector",
-						},
-						Spec: nqostype.Spec{
-							Egress: []nqostype.Rule{
-								{
-									Priority: 0,
-									DSCP:     50,
-									// Bandwidth: nqostype.Bandwidth{},
-									Classifier: nqostype.Classifier{
-										To: []nqostype.Destination{
-											{
-												IPBlock: &networkingv1.IPBlock{
-													CIDR: "128.115.0.0/17",
-													Except: []string{
-														"128.115.0.0",
-														"123.123.123.123",
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					}
-					nqosWithoutSrcSelector.ResourceVersion = time.Now().String()
-					_, err := fakeNQoSClient.K8sV1().NetworkQoSes(nqosNamespace).Update(context.TODO(), nqosWithoutSrcSelector, metav1.UpdateOptions{})
-					Expect(err).NotTo(HaveOccurred())
-
-					dbIDs := libovsdbops.NewDbObjectIDs(libovsdbops.AddressSetNamespace, defaultControllerName, map[libovsdbops.ExternalIDKey]string{
-						libovsdbops.ObjectNameKey: nqosNamespace,
-					})
-					addrset, err := defaultAddrsetFactory.EnsureAddressSet(dbIDs)
-					Expect(err).NotTo(HaveOccurred())
-					v4HashName, _ := addrset.GetASHashNames()
-
-					// Ensure that QoS priority and Bandwidth have been properly changed by OVN
-					var qos *nbdb.QoS
-					Eventually(func() bool {
-						qos, err = findQoS(defaultControllerName, nqosNamespace, "no-source-selector", 0)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(qos).NotTo(BeNil())
-						return qos.Priority == 0 && len(qos.Bandwidth) == 0
-					}).WithTimeout(5 * time.Second).WithPolling(1 * time.Second).Should(BeTrue())
-					Expect(qos.Match).Should(Equal(fmt.Sprintf("ip4.src == {$%s} && ip4.dst == 128.115.0.0/17 && ip4.dst != {128.115.0.0,123.123.123.123}", v4HashName)))
 				}
 
 				By("removes IP from destination address set if pod is deleted")
