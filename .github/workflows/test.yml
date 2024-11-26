@@ -470,6 +470,20 @@ jobs:
         sudo apt-get install linux-modules-extra-$(uname -r) -y
         sudo modprobe vrf
 
+    - name: Set up environment
+        run: |
+          echo "Checking available disks..."
+          df -h
+          
+          echo "Formatting and mounting /dev/sdb..."
+          sudo mkfs.ext4 /dev/sdb
+          sudo mkdir -p /mnt/workspace
+          sudo mount /dev/sdb /mnt/workspace
+          sudo chmod 777 /mnt/workspace
+          
+          echo "After mounting:"
+          df -h
+    
     - name: Free up disk space
       run: |
         sudo rm -rf /usr/local/lib/android/sdk
