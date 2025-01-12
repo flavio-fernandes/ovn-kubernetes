@@ -68,6 +68,8 @@ type AddressSet interface {
 	DeleteAddresses(addresses []string) error
 	// DeleteAddressesReturnOps returns the ops needed to delete the slice of addresses from the address set
 	DeleteAddressesReturnOps(addresses []string) ([]ovsdb.Operation, error)
+	// GetUuids returns the uuids of ipv6 and ipv4 addressSets
+	GetUuids() (string, string)
 	// Destroy deletes the entire address set
 	Destroy() error
 }
@@ -129,6 +131,19 @@ func (asf *ovnAddressSetFactory) EnsureAddressSet(dbIDs *libovsdbops.DbObjectIDs
 	_, err = libovsdbops.TransactAndCheck(asf.nbClient, ops)
 	if err != nil {
 		return nil, err
+	}
+	// get address set from cache
+	addrset, err := asf.GetAddressSet(dbIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lookup address set by %v: %v", dbIDs, err)
+	}
+	// set uuid as newly created address set doesn't have it in as
+	v4Uuid, v6Uuid := addrset.GetUuids()
+	if as.v4 != nil {
+		as.v4.uuid = v4Uuid
+	}
+	if as.v6 != nil {
+		as.v6.uuid = v6Uuid
 	}
 	return as, nil
 }
@@ -511,6 +526,18 @@ func (as *ovnAddressSets) DeleteAddressesReturnOps(addresses []string) ([]ovsdb.
 		ops = append(ops, op...)
 	}
 	return ops, nil
+}
+
+func (as *ovnAddressSets) GetUuids() (string, string) {
+	var ipv4Uuid string
+	var ipv6Uuid string
+	if as.v4 != nil {
+		ipv4Uuid = as.v4.uuid
+	}
+	if as.v6 != nil {
+		ipv6Uuid = as.v6.uuid
+	}
+	return ipv4Uuid, ipv6Uuid
 }
 
 func (as *ovnAddressSets) Destroy() error {
