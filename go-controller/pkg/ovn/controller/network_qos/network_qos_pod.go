@@ -73,7 +73,7 @@ func (c *Controller) syncNetworkQoSPod(key string) error {
 	if pod == nil || util.PodCompleted(pod) {
 		for _, cachedKey := range c.nqosCache.GetKeys() {
 			err := c.nqosCache.DoWithLock(cachedKey, func(nqosKey string) error {
-				if nqosObj, loaded := c.nqosCache.Load(nqosKey); loaded {
+				if nqosObj, _ := c.nqosCache.Load(nqosKey); nqosObj != nil {
 					return c.clearPodForNQOS(namespace, name, nqosObj)
 				}
 				return nil
@@ -97,7 +97,7 @@ func (c *Controller) syncNetworkQoSPod(key string) error {
 	// case (i)/(ii)
 	for _, cachedKey := range c.nqosCache.GetKeys() {
 		err := c.nqosCache.DoWithLock(cachedKey, func(nqosKey string) error {
-			if nqosObj, loaded := c.nqosCache.Load(nqosKey); loaded {
+			if nqosObj, _ := c.nqosCache.Load(nqosKey); nqosObj != nil {
 				return c.setPodForNQOS(pod, nqosObj, ns)
 			} else {
 				klog.Warningf("NetworkQoS not synced yet: %s", nqosKey)
