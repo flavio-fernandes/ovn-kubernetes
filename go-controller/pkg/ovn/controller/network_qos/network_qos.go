@@ -79,9 +79,12 @@ func (c *Controller) syncNetworkQoS(key string) error {
 		}
 	}
 	klog.V(5).Infof("%s - Processing NetworkQoS %s/%s", c.controllerName, nqos.Namespace, nqos.Name)
+	// save key to avoid racing
+	c.nqosCache.Store(key, nil)
 	// at this stage the NQOS exists in the cluster
 	return c.nqosCache.DoWithLock(key, func(nqosKey string) error {
 		if err = c.ensureNetworkQos(nqos); err != nil {
+			c.nqosCache.Delete(key)
 			// we can ignore the error if status update doesn't succeed; best effort
 			c.updateNQOSStatusToNotReady(nqos.Namespace, nqos.Name, "failed to enforce", err)
 			return err
