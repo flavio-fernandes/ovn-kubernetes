@@ -56,7 +56,7 @@ func (c *Controller) syncNetworkQoSNamespace(key string) error {
 	if namespace == nil {
 		for _, cachedKey := range c.nqosCache.GetKeys() {
 			err := c.nqosCache.DoWithLock(cachedKey, func(nqosKey string) error {
-				if nqosObj, loaded := c.nqosCache.Load(nqosKey); loaded {
+				if nqosObj, _ := c.nqosCache.Load(nqosKey); nqosObj != nil {
 					return c.clearNamespaceForNQOS(key, nqosObj)
 				}
 				return nil
@@ -71,7 +71,7 @@ func (c *Controller) syncNetworkQoSNamespace(key string) error {
 	// case (i)/(ii)
 	for _, cachedKey := range c.nqosCache.GetKeys() {
 		err := c.nqosCache.DoWithLock(cachedKey, func(nqosKey string) error {
-			if nqosObj, loaded := c.nqosCache.Load(nqosKey); loaded {
+			if nqosObj, _ := c.nqosCache.Load(nqosKey); nqosObj != nil {
 				return c.setNamespaceForNQOS(namespace, nqosObj)
 			} else {
 				klog.Warningf("NetworkQoS not synced yet: %s", nqosKey)

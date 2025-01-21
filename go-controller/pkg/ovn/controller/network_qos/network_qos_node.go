@@ -75,8 +75,8 @@ func (c *Controller) syncNetworkQoSNode(key string) error {
 	}
 	for _, cachedKey := range c.nqosCache.GetKeys() {
 		err := c.nqosCache.DoWithLock(cachedKey, func(nqosKey string) error {
-			nqosObj, loaded := c.nqosCache.Load(nqosKey)
-			if !loaded {
+			nqosObj, _ := c.nqosCache.Load(nqosKey)
+			if nqosObj == nil {
 				klog.Warningf("NetworkQoS not synced yet: %s", nqosKey)
 				// requeue nqos key to sync it
 				c.nqosQueue.Add(nqosKey)
