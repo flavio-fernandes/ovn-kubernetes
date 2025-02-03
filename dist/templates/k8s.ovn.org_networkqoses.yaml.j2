@@ -246,18 +246,8 @@ spec:
                       maximum: 63
                       minimum: 0
                       type: integer
-                    priority:
-                      description: |-
-                        priority The NetworkQoS rule’s priority. Rules with numerically higher
-                        priority take precedence over those with lower. If two NetworkQoS
-                        rules with the same priority both match, then the one
-                        actually applied to a packet is undefined.
-                      maximum: 32767
-                      minimum: 0
-                      type: integer
                   required:
                   - dscp
-                  - priority
                   type: object
                 type: array
               netAttachRefs:
@@ -364,8 +354,16 @@ spec:
                     type: object
                 type: object
                 x-kubernetes-map-type: atomic
+              priority:
+                description: |-
+                  priority is a value from 0 to 100 and represents the NetworkQoS' priority.
+                  QoSes with numerically higher priority takes precedence over those with lower.
+                maximum: 1
+                minimum: 100
+                type: integer
             required:
             - egress
+            - priority
             type: object
           status:
             description: Status defines the observed state of NetworkQoS

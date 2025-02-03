@@ -386,3 +386,7 @@ func (dest *Destination) addPodsInNamespace(ctrl *Controller, namespace string) 
 	}
 	return nil
 }
+
+func getQoSRulePriority(qosPriority, ruleIndex int) int {
+	return 10000 + qosPriority*10 + ruleIndex
+}

@@ -101,6 +101,7 @@ func tableEntrySetup(enableInterconnect bool) {
 			Name:      nqosName,
 		},
 		Spec: nqostype.Spec{
+			Priority: 100,
 			PodSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"app": "client",
@@ -108,8 +109,7 @@ func tableEntrySetup(enableInterconnect bool) {
 			},
 			Egress: []nqostype.Rule{
 				{
-					Priority: 100,
-					DSCP:     50,
+					DSCP: 50,
 					Bandwidth: nqostype.Bandwidth{
 						Rate:  10000,
 						Burst: 100000,
@@ -145,8 +145,7 @@ func tableEntrySetup(enableInterconnect bool) {
 					},
 				},
 				{
-					Priority: 101,
-					DSCP:     51,
+					DSCP: 51,
 					Classifier: nqostype.Classifier{
 						To: []nqostype.Destination{
 							{
@@ -281,7 +280,7 @@ var _ = Describe("NetworkQoS Controller", func() {
 					dst1HashName4, _ := dst1AddrSet.GetASHashNames()
 					Expect(qos0.Match).Should(Equal(fmt.Sprintf("ip4.src == {$%s} && (ip4.dst == {$%s} || (ip4.dst == 128.116.0.0/17 && ip4.dst != {128.116.0.0,128.116.0.255})) && tcp && tcp.dst == 8080", srcHashName4, dst1HashName4)))
 					Expect(qos0.Action).To(ContainElement(50))
-					Expect(qos0.Priority).To(Equal(100))
+					Expect(qos0.Priority).To(Equal(11000))
 					Expect(qos0.Bandwidth).To(ContainElements(10000, 100000))
 					dst3AddrSet, err3 := findAddressSet(defaultAddrsetFactory, nqosNamespace, nqosName, "1", "0", defaultControllerName)
 					Expect(err3).NotTo(HaveOccurred())
@@ -446,8 +445,7 @@ var _ = Describe("NetworkQoS Controller", func() {
 					nqosUpdate, err := fakeNQoSClient.K8sV1().NetworkQoSes(nqosNamespace).Get(context.TODO(), nqosName, metav1.GetOptions{})
 					Expect(err).NotTo(HaveOccurred())
 					nqosUpdate.Spec.Egress = append(nqosUpdate.Spec.Egress, nqostype.Rule{
-						Priority: 101,
-						DSCP:     102,
+						DSCP: 102,
 						Classifier: nqostype.Classifier{
 							To: []nqostype.Destination{
 								{
@@ -483,6 +481,7 @@ var _ = Describe("NetworkQoS Controller", func() {
 								Name:      "unknown",
 							},
 						},
+						Priority: 100,
 						PodSelector: metav1.LabelSelector{
 							MatchLabels: map[string]string{
 								"app": "client",
@@ -490,8 +489,7 @@ var _ = Describe("NetworkQoS Controller", func() {
 						},
 						Egress: []nqostype.Rule{
 							{
-								Priority: 100,
-								DSCP:     50,
+								DSCP: 50,
 								Bandwidth: nqostype.Bandwidth{
 									Rate:  10000,
 									Burst: 100000,
@@ -552,10 +550,10 @@ var _ = Describe("NetworkQoS Controller", func() {
 							Name:      "no-source-selector",
 						},
 						Spec: nqostype.Spec{
+							Priority: 100,
 							Egress: []nqostype.Rule{
 								{
-									Priority: 100,
-									DSCP:     50,
+									DSCP: 50,
 									Bandwidth: nqostype.Bandwidth{
 										Rate:  10000,
 										Burst: 100000,
@@ -592,10 +590,10 @@ var _ = Describe("NetworkQoS Controller", func() {
 							Name:      "no-source-selector",
 						},
 						Spec: nqostype.Spec{
+							Priority: 0,
 							Egress: []nqostype.Rule{
 								{
-									Priority: 0,
-									DSCP:     50,
+									DSCP: 50,
 									// Bandwidth: nqostype.Bandwidth{},
 									Classifier: nqostype.Classifier{
 										To: []nqostype.Destination{
@@ -631,7 +629,7 @@ var _ = Describe("NetworkQoS Controller", func() {
 						qos, err = findQoS(defaultControllerName, nqosNamespace, "no-source-selector", 0)
 						Expect(err).NotTo(HaveOccurred())
 						Expect(qos).NotTo(BeNil())
-						return qos.Priority == 0 && len(qos.Bandwidth) == 0
+						return qos.Priority == 10000 && len(qos.Bandwidth) == 0
 					}).WithTimeout(5 * time.Second).WithPolling(1 * time.Second).Should(BeTrue())
 					Expect(qos.Match).Should(Equal(fmt.Sprintf("ip4.src == {$%s} && ip4.dst == 128.115.0.0/17 && ip4.dst != {128.115.0.0,123.123.123.123}", v4HashName)))
 				}
