@@ -115,11 +115,11 @@ func (c *Controller) ensureNetworkQos(nqos *networkqosapi.NetworkQoS) error {
 
 	// set EgressRules to desiredNQOSState
 	rules := []*GressRule{}
-	for _, ruleSpec := range nqos.Spec.Egress {
+	for index, ruleSpec := range nqos.Spec.Egress {
 		bwRate := int(ruleSpec.Bandwidth.Rate)
 		bwBurst := int(ruleSpec.Bandwidth.Burst)
 		ruleState := &GressRule{
-			Priority: ruleSpec.Priority,
+			Priority: getQoSRulePriority(nqos.Spec.Priority, index),
 			Dscp:     ruleSpec.DSCP,
 		}
 		if bwRate > 0 {

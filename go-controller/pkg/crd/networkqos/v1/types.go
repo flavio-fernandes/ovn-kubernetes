@@ -59,19 +59,17 @@ type Spec struct {
 	// +optional
 	PodSelector metav1.LabelSelector `json:"podSelector,omitempty"`
 
+	// priority is a value from 1 to 100 and represents the NetworkQoS' priority.
+	// QoSes with numerically higher priority takes precedence over those with lower.
+	// +kubebuilder:validation:Minimum:=1
+	// +kubebuilder:validation:Maximum:=100
+	Priority int `json:"priority"`
+
 	// egress a collection of Egress NetworkQoS rule objects
 	Egress []Rule `json:"egress"`
 }
 
 type Rule struct {
-	// priority The NetworkQoS rule’s priority. Rules with numerically higher
-	// priority take precedence over those with lower. If two NetworkQoS
-	// rules with the same priority both match, then the one
-	// actually applied to a packet is undefined.
-	// +kubebuilder:validation:Maximum:=32767
-	// +kubebuilder:validation:Minimum:=0
-	Priority int `json:"priority"`
-
 	// dscp marking value for matching pods' traffic.
 	// +kubebuilder:validation:Maximum:=63
 	// +kubebuilder:validation:Minimum:=0

@@ -20,7 +20,6 @@ package v1
 // RuleApplyConfiguration represents a declarative configuration of the Rule type for use
 // with apply.
 type RuleApplyConfiguration struct {
-	Priority   *int                          `json:"priority,omitempty"`
 	DSCP       *int                          `json:"dscp,omitempty"`
 	Classifier *ClassifierApplyConfiguration `json:"classifier,omitempty"`
 	Bandwidth  *BandwidthApplyConfiguration  `json:"bandwidth,omitempty"`
@@ -30,14 +29,6 @@ type RuleApplyConfiguration struct {
 // apply.
 func Rule() *RuleApplyConfiguration {
 	return &RuleApplyConfiguration{}
-}
-
-// WithPriority sets the Priority field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Priority field is set to the value of the last call.
-func (b *RuleApplyConfiguration) WithPriority(value int) *RuleApplyConfiguration {
-	b.Priority = &value
-	return b
 }
 
 // WithDSCP sets the DSCP field in the declarative configuration to the given value

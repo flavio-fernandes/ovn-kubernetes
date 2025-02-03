@@ -242,10 +242,10 @@ func newNetworkQoS(name, namespace string) *networkqos.NetworkQoS {
 					Name:      "stream",
 				},
 			},
+			Priority: 100,
 			Egress: []networkqos.Rule{
 				{
-					Priority: 100,
-					DSCP:     50,
+					DSCP: 50,
 					Classifier: networkqos.Classifier{
 						To: []networkqos.Destination{
 							{
