@@ -217,10 +217,10 @@ func newNetworkQoS(namespace string) *networkqosapi.NetworkQoS {
 					Name:      "stream",
 				},
 			},
+			Priority: 100,
 			Egress: []networkqosapi.Rule{
 				{
-					Priority: 100,
-					DSCP:     60,
+					DSCP: 60,
 					Classifier: networkqosapi.Classifier{
 						To: []networkqosapi.Destination{
 							{

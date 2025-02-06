@@ -27,6 +27,7 @@ import (
 type SpecApplyConfiguration struct {
 	NetworkAttachmentRefs []v1.ObjectReference                    `json:"netAttachRefs,omitempty"`
 	PodSelector           *metav1.LabelSelectorApplyConfiguration `json:"podSelector,omitempty"`
+	Priority              *int                                    `json:"priority,omitempty"`
 	Egress                []RuleApplyConfiguration                `json:"egress,omitempty"`
 }
 
@@ -51,6 +52,14 @@ func (b *SpecApplyConfiguration) WithNetworkAttachmentRefs(values ...v1.ObjectRe
 // If called multiple times, the PodSelector field is set to the value of the last call.
 func (b *SpecApplyConfiguration) WithPodSelector(value *metav1.LabelSelectorApplyConfiguration) *SpecApplyConfiguration {
 	b.PodSelector = value
+	return b
+}
+
+// WithPriority sets the Priority field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Priority field is set to the value of the last call.
+func (b *SpecApplyConfiguration) WithPriority(value int) *SpecApplyConfiguration {
+	b.Priority = &value
 	return b
 }
 
