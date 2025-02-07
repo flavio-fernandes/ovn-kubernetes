@@ -590,7 +590,7 @@ var _ = Describe("NetworkQoS Controller", func() {
 							Name:      "no-source-selector",
 						},
 						Spec: nqostype.Spec{
-							Priority: 0,
+							Priority: 1,
 							Egress: []nqostype.Rule{
 								{
 									DSCP: 50,
@@ -629,7 +629,7 @@ var _ = Describe("NetworkQoS Controller", func() {
 						qos, err = findQoS(defaultControllerName, nqosNamespace, "no-source-selector", 0)
 						Expect(err).NotTo(HaveOccurred())
 						Expect(qos).NotTo(BeNil())
-						return qos.Priority == 10000 && len(qos.Bandwidth) == 0
+						return qos.Priority == 10010 && len(qos.Bandwidth) == 0
 					}).WithTimeout(5 * time.Second).WithPolling(1 * time.Second).Should(BeTrue())
 					Expect(qos.Match).Should(Equal(fmt.Sprintf("ip4.src == {$%s} && ip4.dst == 128.115.0.0/17 && ip4.dst != {128.115.0.0,123.123.123.123}", v4HashName)))
 				}

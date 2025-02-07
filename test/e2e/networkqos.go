@@ -186,9 +186,9 @@ spec:
   podSelector:
     matchLabels:
       component: nqos-test-src
+  priority: 50
   egress:
-  - priority: 1001
-    dscp: %d
+  - dscp: %d
     classifier:
       to:
       - podSelector:
@@ -197,8 +197,7 @@ spec:
         namespaceSelector:
           matchLabels:
             app: nqos-test
-  - priority: 1002
-    dscp: %d
+  - dscp: %d
     classifier:
       port:
         protocol: TCP
@@ -209,8 +208,7 @@ spec:
         namespaceSelector:
           matchLabels:
            app: nqos-test
-  - priority: 1003
-    dscp: %d
+  - dscp: %d
     classifier:
       port:
         protocol: TCP
@@ -318,17 +316,16 @@ spec:
   podSelector:
     matchLabels:
       component: nqos-test-src
+  priority: 51
   egress:
-  - priority: 1001
-    dscp: %d
+  - dscp: %d
     classifier:
       to:
       - ipBlock:
           cidr: %s
       - ipBlock:
           cidr: %s
-  - priority: 1002
-    dscp: %d
+  - dscp: %d
     classifier:
       port:
         protocol: TCP
@@ -337,8 +334,7 @@ spec:
           cidr: %s
       - ipBlock:
           cidr: %s
-  - priority: 1003
-    dscp: %d
+  - dscp: %d
     classifier:
       port:
         protocol: TCP
@@ -413,9 +409,9 @@ spec:
   podSelector:
     matchLabels:
       component: nqos-test-src
+  priority: 52
   egress:
-  - priority: 1001
-    dscp: 1
+  - dscp: 1
     bandwidth:
       rate: %d
     classifier:
@@ -475,9 +471,9 @@ spec:
   podSelector:
     matchLabels:
       component: nqos-test-src
+  priority: 53
   egress:
-  - priority: 1001
-    dscp: 2
+  - dscp: 2
     bandwidth:
       rate: %d
     classifier:
@@ -540,9 +536,9 @@ spec:
   podSelector:
     matchLabels:
       component: nqos-test-src
+  priority: 54
   egress:
-  - priority: 102
-    dscp: 3
+  - dscp: 3
     bandwidth:
       rate: %d
     classifier:
