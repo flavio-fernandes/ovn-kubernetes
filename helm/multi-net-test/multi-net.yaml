@@ -1,0 +1,18 @@
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: ovn-stream-veth
+  namespace: default
+spec:
+  config: |2
+    {
+            "cniVersion": "1.0.0",
+            "name": "ovn-stream-veth",
+            "type": "ovn-k8s-cni-overlay",
+            "master": "eth1",
+            "topology":"layer3",
+            "subnets": "10.245.0.0/16/24",
+            "mtu": 1300,
+            "netAttachDefName": "default/ovn-stream-veth"
+    }
+
