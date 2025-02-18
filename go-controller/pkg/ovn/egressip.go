@@ -1721,6 +1721,13 @@ func (e *EgressIPController) syncStaleSNATRules(egressIPCache egressIPCache) err
 // trips to the API server per item.
 func (e *EgressIPController) generateCacheForEgressIP() (egressIPCache, error) {
 	cache := egressIPCache{}
+
+	// noop if configured to not manage the default network
+	if config.OVNKubernetesFeature.SecondaryCNI {
+		klog.Info("Skipping generateCacheForEgressIP because ovn is not handling primary network")
+		return cache, nil
+	}
+
 	namespaces, err := e.watchFactory.GetNamespaces()
 	if err != nil {
 		return cache, fmt.Errorf("failed to get all namespaces: %v", err)

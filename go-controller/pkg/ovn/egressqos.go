@@ -140,6 +140,12 @@ func (oc *DefaultNetworkController) cloneEgressQoSRule(raw egressqosapi.EgressQo
 func (oc *DefaultNetworkController) createASForEgressQoSRule(podSelector metav1.LabelSelector, namespace string, priority int) (addressset.AddressSet, *sync.Map, error) {
 	var addrSet addressset.AddressSet
 
+	// noop if configured to not manage the default network
+	if config.OVNKubernetesFeature.SecondaryCNI {
+		klog.Info("Skipping createASForEgressQoSRule because ovn is not handling primary network")
+		return addrSet, &sync.Map{}, nil
+	}
+
 	selector, err := metav1.LabelSelectorAsSelector(&podSelector)
 	if err != nil {
 		return nil, nil, err
@@ -697,6 +703,12 @@ func (oc *DefaultNetworkController) syncEgressQoSPod(key string) error {
 
 	obj, loaded := oc.egressQoSCache.Load(namespace)
 	if !loaded { // no EgressQoS in the namespace
+		return nil
+	}
+
+	// noop if configured to not manage the default network
+	if config.OVNKubernetesFeature.SecondaryCNI {
+		klog.Info("Skipping syncEgressQoSPod because ovn is not handling primary network")
 		return nil
 	}
 

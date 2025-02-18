@@ -536,6 +536,12 @@ func (c *Controller) processEIP(eip *eipv1.EgressIP) (*eIPConfig, sets.Set[strin
 	}
 	// max of 1 EIP IP is selected. Return when 1 is found.
 	for _, status := range eip.Status.Items {
+		// noop for egressip if configured as a secondary CNI interface
+		if ovnconfig.OVNKubernetesFeature.SecondaryCNI {
+			klog.Info("Skipping processEIP because ovn is only handling secondary networks")
+			break
+		}
+
 		if isValid := isEIPStatusItemValid(status, c.nodeName); !isValid {
 			continue
 		}
@@ -980,6 +986,12 @@ func (c *Controller) repairNode() error {
 		return fmt.Errorf("failed to get node egress IP config: %v", err)
 	}
 	for _, egressIP := range egressIPs {
+		// noop for egressip if configured as a secondary CNI interface
+		if ovnconfig.OVNKubernetesFeature.SecondaryCNI {
+			klog.Info("Skipping repairNode because ovn is only handling secondary networks")
+			break
+		}
+
 		if len(egressIP.Status.Items) == 0 {
 			continue
 		}

@@ -10,6 +10,7 @@ import (
 
 	libovsdbclient "github.com/ovn-org/libovsdb/client"
 	"github.com/ovn-org/libovsdb/ovsdb"
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
 	libovsdbops "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/libovsdb/ops"
 	libovsdbutil "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/libovsdb/util"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/metrics"
@@ -329,6 +330,13 @@ func (c *Controller) expandANPRulePeers(anp *adminNetworkPolicyState) error {
 // It also adds up all the peerAddresses that are supposed to be present in the created AddressSet and returns them on
 // a per-rule basis so that the actual ops to transact these into the AddressSet can be constructed using that
 func (c *Controller) expandRulePeers(rule *gressRule) error {
+
+	// noop if configured to not manage the default network
+	if config.OVNKubernetesFeature.SecondaryCNI {
+		klog.Infof("Skipping expandRulePeers because ovn is not handling %s", c.controllerName)
+		return nil
+	}
+
 	for _, peer := range rule.peers {
 		namespaces, err := c.anpNamespaceLister.List(peer.namespaceSelector)
 		if err != nil {
@@ -417,6 +425,13 @@ func (c *Controller) convertANPSubjectToLSPs(anp *adminNetworkPolicyState) ([]*n
 	if err != nil {
 		return nil, err
 	}
+
+	// noop if configured to not manage the default network
+	if config.OVNKubernetesFeature.SecondaryCNI {
+		klog.Infof("Skipping convertANPSubjectToLSPs because ovn is not handling %s", c.controllerName)
+		return lsports, nil
+	}
+
 	// Process NamedPorts if any
 	// a representation that stores name of the port as key and slice of indexes of rules
 	// that match this namedPort as value

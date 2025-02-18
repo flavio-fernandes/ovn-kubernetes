@@ -69,7 +69,13 @@ func (oc *DefaultNetworkController) syncPeriodic() {
 func (oc *DefaultNetworkController) getPortInfo(pod *kapi.Pod) *lpInfo {
 	var portInfo *lpInfo
 	key := util.GetLogicalPortName(pod.Namespace, pod.Name)
-	if util.PodWantsHostNetwork(pod) {
+
+	createDummyPortInfo := false
+	if !oc.GetNetInfo().IsSecondary() && config.OVNKubernetesFeature.SecondaryCNI {
+		createDummyPortInfo = true
+	}
+
+	if createDummyPortInfo || util.PodWantsHostNetwork(pod) {
 		// create dummy logicalPortInfo for host-networked pods
 		mac, _ := net.ParseMAC("00:00:00:00:00:00")
 		portInfo = &lpInfo{
@@ -163,6 +169,11 @@ func (oc *DefaultNetworkController) ensureLocalZonePod(oldPod, pod *kapi.Pod, ad
 		}
 	}
 
+	if !oc.GetNetInfo().IsSecondary() && config.OVNKubernetesFeature.SecondaryCNI {
+		klog.V(5).Infof("Skipping ensureLocalZonePod because ovn is not handling primary network for %s/%s", pod.Namespace, pod.Name)
+		return nil
+	}
+
 	if !util.PodWantsHostNetwork(pod) && addPort {
 		if err := oc.addLogicalPort(pod); err != nil {
 			return fmt.Errorf("addLogicalPort failed for %s/%s: %w", pod.Namespace, pod.Name, err)
@@ -203,6 +214,12 @@ func (oc *DefaultNetworkController) ensureLocalZonePod(oldPod, pod *kapi.Pod, ad
 }
 
 func (oc *DefaultNetworkController) ensureRemotePodIP(oldPod, pod *kapi.Pod, addPort bool) error {
+
+	if !oc.GetNetInfo().IsSecondary() && config.OVNKubernetesFeature.SecondaryCNI {
+		klog.V(5).Infof("Skipping ensureRemotePodIP because ovn is not handling primary network for %s/%s", pod.Namespace, pod.Name)
+		return nil
+	}
+
 	if (addPort || (oldPod != nil && len(pod.Status.PodIPs) != len(oldPod.Status.PodIPs))) && !util.PodWantsHostNetwork(pod) {
 		podIfAddrs, err := util.GetPodCIDRsWithFullMask(pod, oc.GetNetInfo())
 		if err != nil {
@@ -283,6 +300,12 @@ func (oc *DefaultNetworkController) removeLocalZonePod(pod *kapi.Pod, portInfo *
 			metrics.RecordPodEvent("delete", duration)
 		}()
 	}
+
+	if !oc.GetNetInfo().IsSecondary() && config.OVNKubernetesFeature.SecondaryCNI {
+		klog.V(5).Infof("Skipping removeLocalZonePod because ovn is not handling primary network for %s/%s", pod.Namespace, pod.Name)
+		return nil
+	}
+
 	if util.PodWantsHostNetwork(pod) {
 		if err := oc.deletePodExternalGW(pod); err != nil {
 			return fmt.Errorf("unable to delete external gateway routes for pod %s: %w",

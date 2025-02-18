@@ -109,6 +109,12 @@ func (bnnc *BaseNodeNetworkController) watchPodsDPU() (*factory.Handler, error) 
 				return
 			}
 
+			// treat pods as host networked when configured to not manage the default network
+			if config.OVNKubernetesFeature.SecondaryCNI && !bnnc.IsSecondary() {
+				klog.Infof("Skipping pod %s/%s because ovn is not handling default network", pod.Namespace, pod.Name)
+				return
+			}
+
 			// add all the Pod's NADs into Pod's nadToDPUCDMap
 			// For default network, NAD name is DefaultNetworkName.
 			nadToDPUCDMap := map[string]*util.DPUConnectionDetails{}

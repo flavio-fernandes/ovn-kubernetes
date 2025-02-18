@@ -156,6 +156,12 @@ func (oc *DefaultNetworkController) updateNamespace(old, newer *kapi.Namespace) 
 					errors = append(errors, fmt.Errorf("failed to get all the pods (%v)", err))
 				}
 				for _, pod := range existingPods {
+					nInfo := oc.GetNetInfo()
+					if !nInfo.IsSecondary() && config.OVNKubernetesFeature.SecondaryCNI {
+						klog.Info("Skipping updateNamespace because ovn is not handling primary network")
+						break
+					}
+
 					if !oc.isPodScheduledinLocalZone(pod) {
 						continue
 					}
@@ -164,7 +170,7 @@ func (oc *DefaultNetworkController) updateNamespace(old, newer *kapi.Namespace) 
 					if util.PodWantsHostNetwork(pod) {
 						continue
 					}
-					podIPs, err := util.GetPodIPsOfNetwork(pod, oc.GetNetInfo())
+					podIPs, err := util.GetPodIPsOfNetwork(pod, nInfo)
 					if err != nil {
 						errors = append(errors, fmt.Errorf("unable to get pod %q IPs for SNAT rule removal err (%v)", logicalPort, err))
 					}

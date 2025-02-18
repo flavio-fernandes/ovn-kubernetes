@@ -350,6 +350,11 @@ func (c *ExternalGatewayMasterController) buildExternalIPGatewaysFromAnnotations
 }
 
 func populateManagedGWIPsCacheForPods(gwInfo *gateway_info.GatewayInfo, cache map[string]*managedGWIPs, podList []*v1.Pod) {
+	// noop if configured to not manage the default network
+	if config.OVNKubernetesFeature.SecondaryCNI {
+		klog.Info("Skipping populateManagedGWIPsCacheForPods because ovn is not handling primary network")
+		return
+	}
 	for gwIP := range gwInfo.Gateways {
 		for _, pod := range podList {
 			// ignore completed pods, host networked pods, pods not scheduled

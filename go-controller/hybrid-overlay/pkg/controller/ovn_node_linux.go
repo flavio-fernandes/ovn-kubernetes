@@ -81,6 +81,13 @@ func (n *NodeController) AddPod(pod *kapi.Pod) error {
 	if util.PodWantsHostNetwork(pod) {
 		return nil
 	}
+
+	// treat pods as host networked when configured to not manage the default network
+	if config.OVNKubernetesFeature.SecondaryCNI {
+		klog.Infof("Skipping pod %s/%s because ovn is not handling default network", pod.Namespace, pod.Name)
+		return nil
+	}
+
 	if util.PodCompleted(pod) {
 		klog.Infof("Cleaning up hybrid overlay pod %s/%s because it has completed", pod.Namespace, pod.Name)
 		return n.DeletePod(pod)
@@ -124,6 +131,11 @@ func (n *NodeController) AddPod(pod *kapi.Pod) error {
 func (n *NodeController) DeletePod(pod *kapi.Pod) error {
 	// nothing to do for hostnetworked pods
 	if util.PodWantsHostNetwork(pod) {
+		return nil
+	}
+	// treat pods as host networked when configured to not manage the default network
+	if config.OVNKubernetesFeature.SecondaryCNI {
+		klog.Infof("Skipping pod %s/%s because ovn is not handling default network", pod.Namespace, pod.Name)
 		return nil
 	}
 	podIPs, _, err := getPodDetails(pod)

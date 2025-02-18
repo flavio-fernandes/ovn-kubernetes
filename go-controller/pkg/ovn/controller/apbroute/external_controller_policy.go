@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
 	adminpolicybasedrouteapi "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/adminpolicybasedroute/v1"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/ovn/controller/apbroute/gateway_info"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
@@ -419,6 +420,12 @@ func (m *externalPolicyManager) getPolicyConfigAndUpdatePolicyRefs(policy *admin
 		}
 		podsMap := map[ktypes.NamespacedName]*v1.Pod{}
 		for _, pod := range targetPods {
+			// noop if configured to not manage the default network
+			if config.OVNKubernetesFeature.SecondaryCNI {
+				klog.Info("Skipping getPolicyConfigAndUpdatePolicyRefs because ovn is not handling primary network")
+				break
+			}
+
 			// Ignore completed pods, host networked pods, pods not scheduled or pods without a status IP
 			if util.PodWantsHostNetwork(pod) || util.PodCompleted(pod) || !util.PodScheduled(pod) || len(pod.Status.PodIPs) == 0 {
 				continue

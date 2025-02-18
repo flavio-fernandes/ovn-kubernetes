@@ -168,6 +168,12 @@ func (a *PodAllocator) reconcile(old, new *corev1.Pod, releaseFromAllocator bool
 		return nil
 	}
 
+	// noop if the network is not primary and we are only handling secondary networks
+	if !a.netInfo.IsSecondary() && config.OVNKubernetesFeature.SecondaryCNI {
+		klog.Infof("Skipping pod %s/%s because ovn is only handling secondary networks", pod.Namespace, pod.Name)
+		return nil
+	}
+
 	var activeNetwork util.NetInfo
 	var err error
 

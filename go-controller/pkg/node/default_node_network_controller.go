@@ -1130,6 +1130,13 @@ func (nc *DefaultNodeNetworkController) Start(ctx context.Context) error {
 				klog.Infof("Upgrade Hack: Syncing services took %v", time.Since(start))
 				syncServices = true
 			}
+
+			// treat pods as host networked when configured to not manage the default network
+			if !syncPods && config.OVNKubernetesFeature.SecondaryCNI {
+				klog.Infof("Upgrade Hack: Syncing pods as secondary CNI took %v", time.Since(start))
+				syncPods = true
+			}
+
 			if !syncPods {
 				pods, err := nc.watchFactory.GetAllPods()
 				if err != nil {

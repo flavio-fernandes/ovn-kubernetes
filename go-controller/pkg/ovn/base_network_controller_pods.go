@@ -59,6 +59,11 @@ func (bnc *BaseNetworkController) allocatePodIPsOnSwitch(pod *kapi.Pod,
 	if !util.PodScheduled(pod) || util.PodWantsHostNetwork(pod) {
 		return "", nil
 	}
+
+	// noop if configured to not manage the default network
+	if !bnc.IsSecondary() && config.OVNKubernetesFeature.SecondaryCNI {
+		return "", nil
+	}
 	// skip nodes that are not running ovnk (inferred from host subnets)
 	if bnc.lsManager.IsNonHostSubnetSwitch(switchName) {
 		return "", nil
@@ -290,6 +295,11 @@ func findPodWithIPAddresses(watchFactory *factory.WatchFactory, netInfo util.Net
 		return nil, fmt.Errorf("unable to get pods: %w", err)
 	}
 
+	// noop if configured to not manage the default network
+	if !netInfo.IsSecondary() && config.OVNKubernetesFeature.SecondaryCNI {
+		return nil, nil
+	}
+
 	// iterate through all pods
 	for _, p := range allPods {
 		if util.PodCompleted(p) || util.PodWantsHostNetwork(p) || !util.PodScheduled(p) {
@@ -394,6 +404,12 @@ func (bnc *BaseNetworkController) podExpectedInLogicalCache(pod *kapi.Pod) bool 
 	if err != nil {
 		return false
 	}
+
+	// noop if configured to not manage the default network
+	if !bnc.IsSecondary() && config.OVNKubernetesFeature.SecondaryCNI {
+		return false
+	}
+
 	return !util.PodWantsHostNetwork(pod) &&
 		!(bnc.lsManager.IsNonHostSubnetSwitch(switchName) &&
 			bnc.doesNetworkRequireIPAM()) &&

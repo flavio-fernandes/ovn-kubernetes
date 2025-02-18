@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/config"
 	"github.com/ovn-org/ovn-kubernetes/go-controller/pkg/util"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -43,6 +44,13 @@ func (c *Controller) processNextANPPodWorkItem(wg *sync.WaitGroup) bool {
 // syncAdminNetworkPolicyPod decides the main logic everytime
 // we dequeue a key from the anpPodQueue cache
 func (c *Controller) syncAdminNetworkPolicyPod(key string) error {
+
+	// noop if configured to not manage the default network
+	if config.OVNKubernetesFeature.SecondaryCNI {
+		klog.Infof("Skipping syncAdminNetworkPolicyPod because ovn is not handling %s", c.controllerName)
+		return nil
+	}
+
 	c.Lock()
 	defer c.Unlock()
 	startTime := time.Now()

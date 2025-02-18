@@ -201,6 +201,11 @@ func (oc *DefaultNetworkController) addGWRoutesForNamespace(namespace string, eg
 	if err != nil {
 		return fmt.Errorf("failed to get all the pods (%v)", err)
 	}
+	// noop if configured to not manage the default network
+	if config.OVNKubernetesFeature.SecondaryCNI {
+		klog.Info("Skipping addGWRoutesForNamespace because ovn is not handling primary network")
+		return nil
+	}
 	for _, pod := range existingPods {
 		if util.PodCompleted(pod) || util.PodWantsHostNetwork(pod) {
 			continue

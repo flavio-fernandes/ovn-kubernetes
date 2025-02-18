@@ -168,12 +168,20 @@ func (nb *northBoundClient) deleteGatewayIPs(podNsName ktypes.NamespacedName, to
 // * If the pod wants to use host network
 // * If the pod's phase is either Completed or Failed
 // * If the pod's `PodIPs` status field is empty
+// * If ovn is only configured to handle secondary CNI
 // This value is used to signal the caller that the gateway IPs were not applied to the pod for reasons that are not errors.
 // The error value is populated when an error occurs as usual.
 func (nb *northBoundClient) addGatewayIPs(pod *v1.Pod, egress *gateway_info.GatewayInfoList) (bool, error) {
 	if util.PodCompleted(pod) || util.PodWantsHostNetwork(pod) {
 		return false, nil
 	}
+
+	// noop if configured to not manage the default network
+	if config.OVNKubernetesFeature.SecondaryCNI {
+		klog.Infof("Skipping addGatewayIPs because ovn is not handling primary network for %s/%s", pod.Namespace, pod.Name)
+		return false, nil
+	}
+
 	klog.V(5).Infof("Processing %s/%s with status %s and IPs %+v", pod.Namespace, pod.Name, pod.Status.Phase, pod.Status.PodIPs)
 	podIPs := make([]*net.IPNet, 0)
 	for _, podIP := range pod.Status.PodIPs {

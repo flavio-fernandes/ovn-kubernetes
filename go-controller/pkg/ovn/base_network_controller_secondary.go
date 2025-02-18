@@ -38,6 +38,12 @@ func (bsnc *BaseSecondaryNetworkController) getPortInfoForSecondaryNetwork(pod *
 	if util.PodWantsHostNetwork(pod) {
 		return nil
 	}
+
+	// noop if configured to not manage the default network
+	if !bsnc.IsSecondary() && config.OVNKubernetesFeature.SecondaryCNI {
+		return nil
+	}
+
 	portInfoMap, _ := bsnc.logicalPortCache.getAll(pod)
 	return portInfoMap
 }
@@ -235,6 +241,11 @@ func (bsnc *BaseSecondaryNetworkController) ensurePodForSecondaryNetwork(pod *co
 		return nil
 	}
 
+	// noop if configured to not manage the default network (being a secondary network controller, is this even needed?)
+	if !bsnc.IsSecondary() && config.OVNKubernetesFeature.SecondaryCNI {
+		return nil
+	}
+
 	var kubevirtLiveMigrationStatus *kubevirt.LiveMigrationStatus
 	var err error
 
@@ -423,6 +434,11 @@ func (bsnc *BaseSecondaryNetworkController) addLogicalPortToNetworkForNAD(pod *c
 // failure indicates the pod tear down should be retried later.
 func (bsnc *BaseSecondaryNetworkController) removePodForSecondaryNetwork(pod *corev1.Pod, portInfoMap map[string]*lpInfo) error {
 	if util.PodWantsHostNetwork(pod) || !util.PodScheduled(pod) {
+		return nil
+	}
+
+	// noop if configured to not manage the default network (being a secondary network controller, is this even needed?)
+	if !bsnc.IsSecondary() && config.OVNKubernetesFeature.SecondaryCNI {
 		return nil
 	}
 
