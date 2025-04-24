@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -35,18 +36,14 @@ func (c *Controller) processNextNQOSWorkItem(wg *sync.WaitGroup) bool {
 	}
 	defer c.nqosQueue.Done(nqosKey)
 
-	err := c.syncNetworkQoS(nqosKey)
-	if err == nil {
-		c.nqosQueue.Forget(nqosKey)
-		return true
+	if err := c.syncNetworkQoS(nqosKey); err != nil {
+		if c.nqosQueue.NumRequeues(nqosKey) < maxRetries {
+			c.nqosQueue.AddRateLimited(nqosKey)
+			return true
+		}
+		klog.Warningf("%s: Failed to reconcile NetworkQoS %s: %v", c.controllerName, nqosKey, err)
+		utilruntime.HandleError(fmt.Errorf("failed to reconcile NetworkQoS %s: %v", nqosKey, err))
 	}
-	utilruntime.HandleError(fmt.Errorf("%s: failed to handle key %s, error: %v", c.controllerName, nqosKey, err))
-
-	if c.nqosQueue.NumRequeues(nqosKey) < maxRetries {
-		c.nqosQueue.AddRateLimited(nqosKey)
-		return true
-	}
-
 	c.nqosQueue.Forget(nqosKey)
 	return true
 }
@@ -59,12 +56,11 @@ func (c *Controller) syncNetworkQoS(key string) error {
 	if err != nil {
 		return err
 	}
-	klog.V(5).Infof("%s - Processing sync for Network QoS %s", c.controllerName, nqosName)
-
 	defer func() {
-		klog.V(5).Infof("%s - Finished syncing Network QoS %s : %v", c.controllerName, nqosName, time.Since(startTime))
+		klog.V(5).Infof("%s - Finished reconciling NetworkQoS %s : %v", c.controllerName, nqosName, time.Since(startTime))
 	}()
 
+	klog.V(5).Infof("%s - reconciling NetworkQoS %s", c.controllerName, nqosName)
 	nqos, err := c.nqosLister.NetworkQoSes(nqosNamespace).Get(nqosName)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err
@@ -280,22 +276,31 @@ func (c *Controller) resyncPods(nqosState *networkQoSState) error {
 		return fmt.Errorf("failed to list pods in namespace %s: %w", nqosState.namespace, err)
 	}
 	nsCache := make(map[string]*corev1.Namespace)
+	addressSetMap := map[string]sets.Set[string]{}
 	for _, pod := range pods {
-		if pod.Spec.HostNetwork {
+		if pod.Spec.HostNetwork || pod.DeletionTimestamp != nil {
 			continue
 		}
 		ns := nsCache[pod.Namespace]
 		if ns == nil {
 			ns, err = c.nqosNamespaceLister.Get(pod.Namespace)
 			if err != nil {
+				if apierrors.IsNotFound(err) {
+					klog.Warningf("Namespace %s not found, skipping pod %s/%s", pod.Namespace, pod.Namespace, pod.Name)
+					continue
+				}
 				return fmt.Errorf("failed to get namespace %s: %w", pod.Namespace, err)
 			}
 			nsCache[pod.Namespace] = ns
 		}
-		if err := c.setPodForNQOS(pod, nqosState, ns); err != nil {
+		if ns.DeletionTimestamp != nil {
+			continue
+		}
+		if err := c.setPodForNQOS(pod, nqosState, ns, addressSetMap); err != nil {
 			return err
 		}
 	}
+	nqosState.cleanupStaleAddresses(addressSetMap)
 	return nil
 }
 
@@ -307,16 +312,16 @@ func (c *Controller) networkManagedByMe(networkSelectors crdtypes.NetworkSelecto
 		return c.IsDefault(), nil
 	}
 	var selectedNads []*nadv1.NetworkAttachmentDefinition
+	var err error
 	for _, networkSelector := range networkSelectors {
 		switch networkSelector.NetworkSelectionType {
 		case crdtypes.DefaultNetwork:
 			return c.IsDefault(), nil
 		case crdtypes.ClusterUserDefinedNetworks:
-			nadSelector, err := metav1.LabelSelectorAsSelector(&networkSelector.ClusterUserDefinedNetworkSelector.NetworkSelector)
-			if err != nil {
-				return false, err
+			if networkSelector.ClusterUserDefinedNetworkSelector == nil {
+				return false, fmt.Errorf("empty cluster user defined network selector")
 			}
-			nads, err := c.nadLister.List(nadSelector)
+			nads, err := c.getNetAttachDefsBySelectors(nil, &networkSelector.ClusterUserDefinedNetworkSelector.NetworkSelector)
 			if err != nil {
 				return false, err
 			}
@@ -333,37 +338,9 @@ func (c *Controller) networkManagedByMe(networkSelectors crdtypes.NetworkSelecto
 			if networkSelector.NetworkAttachmentDefinitionSelector == nil {
 				return false, fmt.Errorf("empty network attachment definition selector")
 			}
-			nadSelector, err := metav1.LabelSelectorAsSelector(&networkSelector.NetworkAttachmentDefinitionSelector.NetworkSelector)
+			selectedNads, err = c.getNetAttachDefsBySelectors(&networkSelector.NetworkAttachmentDefinitionSelector.NamespaceSelector, &networkSelector.NetworkAttachmentDefinitionSelector.NetworkSelector)
 			if err != nil {
 				return false, err
-			}
-			if nadSelector.Empty() {
-				return false, fmt.Errorf("empty network selector")
-			}
-			nsSelector, err := metav1.LabelSelectorAsSelector(&networkSelector.NetworkAttachmentDefinitionSelector.NamespaceSelector)
-			if err != nil {
-				return false, err
-			}
-
-			if nsSelector.Empty() {
-				// if namespace selector is empty, list NADs in all namespaces
-				nads, err := c.nadLister.List(nadSelector)
-				if err != nil {
-					return false, err
-				}
-				selectedNads = append(selectedNads, nads...)
-			} else {
-				namespaces, err := c.nqosNamespaceLister.List(nsSelector)
-				if err != nil {
-					return false, err
-				}
-				for _, ns := range namespaces {
-					nads, err := c.nadLister.NetworkAttachmentDefinitions(ns.Name).List(nadSelector)
-					if err != nil {
-						return false, err
-					}
-					selectedNads = append(selectedNads, nads...)
-				}
 			}
 		default:
 			return false, fmt.Errorf("unsupported network selection type %s", networkSelector.NetworkSelectionType)
@@ -393,4 +370,52 @@ func (c *Controller) getLogicalSwitchName(nodeName string) string {
 	default:
 		return ""
 	}
+}
+
+func (c *Controller) getAllNetworkQoSes() ([]*networkqosapi.NetworkQoS, error) {
+	nqoses, err := c.nqosLister.List(labels.Everything())
+	if err != nil {
+		return nil, fmt.Errorf("failed to list NetworkQoS: %v", err)
+	}
+	return nqoses, nil
+}
+
+func (c *Controller) getNetAttachDefsBySelectors(namespaceSelector, nadSelector *metav1.LabelSelector) ([]*nadv1.NetworkAttachmentDefinition, error) {
+	if nadSelector == nil || nadSelector.Size() == 0 {
+		return nil, fmt.Errorf("empty network selector")
+	}
+	nadSel, err := metav1.LabelSelectorAsSelector(nadSelector)
+	if err != nil {
+		return nil, fmt.Errorf("invalid network selector %v: %v", nadSelector.String(), err)
+	}
+	namespaces := []*corev1.Namespace{}
+	if namespaceSelector != nil && namespaceSelector.Size() > 0 {
+		nsSelector, err := metav1.LabelSelectorAsSelector(namespaceSelector)
+		if err != nil {
+			return nil, fmt.Errorf("invalid namespace selector %v: %v", namespaceSelector.String(), err)
+		}
+		namespaces, err = c.nqosNamespaceLister.List(nsSelector)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list namespaces: %v", err)
+		}
+	}
+
+	var selectedNads []*nadv1.NetworkAttachmentDefinition
+	if len(namespaces) == 0 {
+		// if namespace selector is empty, list NADs in all namespaces
+		nads, err := c.nadLister.List(nadSel)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list NADs: %v", err)
+		}
+		selectedNads = append(selectedNads, nads...)
+	} else {
+		for _, ns := range namespaces {
+			nads, err := c.nadLister.NetworkAttachmentDefinitions(ns.Name).List(nadSel)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list NADs in namespace %s: %v", ns.Name, err)
+			}
+			selectedNads = append(selectedNads, nads...)
+		}
+	}
+	return selectedNads, nil
 }
