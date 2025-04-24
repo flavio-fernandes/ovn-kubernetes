@@ -637,6 +637,9 @@ spec:
                 x-kubernetes-validations:
                 - message: networkSelector is immutable
                   rule: self == oldSelf
+                - message: Unsupported network selection type
+                  rule: self.all(sel, sel.networkSelectionType == 'ClusterUserDefinedNetworks'
+                    || sel.networkSelectionType == 'NetworkAttachmentDefinitions')
               podSelector:
                 description: |-
                   podSelector applies the NetworkQoS rule only to the pods in the namespace whose label

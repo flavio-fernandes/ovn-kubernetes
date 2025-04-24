@@ -50,6 +50,7 @@ type Spec struct {
 	// NetworkQoS controller currently supports `NetworkAttachmentDefinitions` type only.
 	// +optional
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf", message="networkSelector is immutable"
+	// +kubebuilder:validation:XValidation:rule="self.all(sel, sel.networkSelectionType == 'ClusterUserDefinedNetworks' || sel.networkSelectionType == 'NetworkAttachmentDefinitions')", message="Unsupported network selection type"
 	NetworkSelectors crdtypes.NetworkSelectors `json:"networkSelectors,omitempty"`
 
 	// podSelector applies the NetworkQoS rule only to the pods in the namespace whose label

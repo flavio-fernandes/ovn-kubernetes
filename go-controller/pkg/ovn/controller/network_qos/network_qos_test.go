@@ -207,7 +207,7 @@ func tableEntrySetup(enableInterconnect bool) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node1",
 			Annotations: map[string]string{
-				"k8s.ovn.org/zone-name": "node1",
+				"k8s.ovn.org/zone-name": "zone1",
 			},
 		},
 	}
@@ -216,7 +216,7 @@ func tableEntrySetup(enableInterconnect bool) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node2",
 			Annotations: map[string]string{
-				"k8s.ovn.org/zone-name": "node2",
+				"k8s.ovn.org/zone-name": "zone1",
 			},
 		},
 	}
@@ -902,8 +902,8 @@ func initNetworkQoSController(netInfo util.NetInfo, addrsetFactory addressset.Ad
 		watchFactory.NADInformer(),
 		addrsetFactory,
 		func(pod *corev1.Pod) bool {
-			return pod.Spec.NodeName == "node1"
-		}, "node1")
+			return true
+		}, "zone1")
 	Expect(err).NotTo(HaveOccurred())
 	err = watchFactory.Start()
 	Expect(err).NotTo(HaveOccurred())
