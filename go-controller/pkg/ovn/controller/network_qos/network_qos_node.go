@@ -52,7 +52,12 @@ func (c *Controller) syncNetworkQoSNode(key string) error {
 	}()
 	// node moves in/out of local zone, resync all the NetworkQoSes
 	for _, nqosName := range c.nqosCache.GetKeys() {
-		c.nqosQueue.Add(nqosName)
+		ns, name, _ := cache.SplitMetaNamespaceKey(nqosName)
+		if nqos, err := c.nqosLister.NetworkQoSes(ns).Get(name); err != nil {
+			klog.Errorf("Failed to get NetworkQoS %s: %v", nqosName, err)
+		} else if nqos != nil {
+			c.nqosQueue.Add(nqos)
+		}
 	}
 	return nil
 }

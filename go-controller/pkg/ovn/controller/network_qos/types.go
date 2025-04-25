@@ -190,7 +190,7 @@ func (nqosState *networkQoSState) getAddressSetHashNames() []string {
 	return addrsetNames
 }
 
-func (nqosState *networkQoSState) cleanupStaleAddresses(addressSetMap map[string]sets.Set[string]) {
+func (nqosState *networkQoSState) cleanupStaleAddresses(addressSetMap map[string]sets.Set[string]) error {
 	if nqosState.SrcAddrSet != nil {
 		addresses := addressSetMap[nqosState.SrcAddrSet.GetName()]
 		v4Addresses, _ := nqosState.SrcAddrSet.GetAddresses()
@@ -202,7 +202,7 @@ func (nqosState *networkQoSState) cleanupStaleAddresses(addressSetMap map[string
 		}
 		if len(staleAddresses) > 0 {
 			if err := nqosState.SrcAddrSet.DeleteAddresses(staleAddresses); err != nil {
-				klog.Errorf("Failed to delete stale addresses from source address set: %v", err)
+				return err
 			}
 		}
 	}
@@ -221,11 +221,12 @@ func (nqosState *networkQoSState) cleanupStaleAddresses(addressSetMap map[string
 			}
 			if len(staleAddresses) > 0 {
 				if err := dest.DestAddrSet.DeleteAddresses(staleAddresses); err != nil {
-					klog.Errorf("Failed to delete stale addresses from destination address set: %v", err)
+					return err
 				}
 			}
 		}
 	}
+	return nil
 }
 
 type GressRule struct {

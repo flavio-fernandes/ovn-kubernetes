@@ -16,7 +16,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
@@ -30,45 +29,38 @@ import (
 func (c *Controller) processNextNQOSWorkItem(wg *sync.WaitGroup) bool {
 	wg.Add(1)
 	defer wg.Done()
-	nqosKey, quit := c.nqosQueue.Get()
+	nqos, quit := c.nqosQueue.Get()
 	if quit {
 		return false
 	}
-	defer c.nqosQueue.Done(nqosKey)
+	defer c.nqosQueue.Done(nqos)
 
-	if err := c.syncNetworkQoS(nqosKey); err != nil {
-		if c.nqosQueue.NumRequeues(nqosKey) < maxRetries {
-			c.nqosQueue.AddRateLimited(nqosKey)
+	if err := c.syncNetworkQoS(nqos); err != nil {
+		if c.nqosQueue.NumRequeues(nqos) < maxRetries {
+			c.nqosQueue.AddRateLimited(nqos)
 			return true
 		}
-		klog.Warningf("%s: Failed to reconcile NetworkQoS %s: %v", c.controllerName, nqosKey, err)
-		utilruntime.HandleError(fmt.Errorf("failed to reconcile NetworkQoS %s: %v", nqosKey, err))
+		klog.Warningf("%s: Failed to reconcile NetworkQoS %s/%s: %v", c.controllerName, nqos.Namespace, nqos.Name, err)
+		utilruntime.HandleError(fmt.Errorf("failed to reconcile NetworkQoS %s/%s: %v", nqos.Namespace, nqos.Name, err))
 	}
-	c.nqosQueue.Forget(nqosKey)
+	c.nqosQueue.Forget(nqos)
 	return true
 }
 
 // syncNetworkQoS decides the main logic everytime
 // we dequeue a key from the nqosQueue cache
-func (c *Controller) syncNetworkQoS(key string) error {
+func (c *Controller) syncNetworkQoS(nqos *networkqosapi.NetworkQoS) error {
 	startTime := time.Now()
-	nqosNamespace, nqosName, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		return err
-	}
+	key := joinMetaNamespaceAndName(nqos.Namespace, nqos.Name)
 	defer func() {
-		klog.V(5).Infof("%s - Finished reconciling NetworkQoS %s : %v", c.controllerName, nqosName, time.Since(startTime))
+		klog.V(5).Infof("%s - Finished reconciling NetworkQoS %s : %v", c.controllerName, key, time.Since(startTime))
 	}()
 
-	klog.V(5).Infof("%s - reconciling NetworkQoS %s", c.controllerName, nqosName)
-	nqos, err := c.nqosLister.NetworkQoSes(nqosNamespace).Get(nqosName)
-	if err != nil && !apierrors.IsNotFound(err) {
-		return err
-	}
-	if nqos == nil {
-		klog.V(6).Infof("%s - NetworkQoS %s no longer exists.", c.controllerName, key)
+	klog.V(5).Infof("%s - reconciling NetworkQoS %s", c.controllerName, key)
+	if nqos.DeletionTimestamp != nil {
+		klog.V(6).Infof("%s - NetworkQoS %s is being deleted.", c.controllerName, key)
 		return c.nqosCache.DoWithLock(key, func(_ string) error {
-			return c.clearNetworkQos(nqosNamespace, nqosName)
+			return c.clearNetworkQos(nqos.Namespace, nqos.Name)
 		})
 	}
 
@@ -77,7 +69,7 @@ func (c *Controller) syncNetworkQoS(key string) error {
 	} else if !networkManagedByMe {
 		// maybe NetworkAttachmentName has been changed from this one to other value, try cleanup anyway
 		return c.nqosCache.DoWithLock(key, func(_ string) error {
-			return c.clearNetworkQos(nqosNamespace, nqosName)
+			return c.clearNetworkQos(nqos.Namespace, nqos.Name)
 		})
 	}
 
@@ -86,7 +78,7 @@ func (c *Controller) syncNetworkQoS(key string) error {
 	return c.nqosCache.DoWithLock(key, func(_ string) error {
 		// save key to avoid racing
 		c.nqosCache.Store(key, nil)
-		if err = c.ensureNetworkQos(nqos); err != nil {
+		if err := c.ensureNetworkQos(nqos); err != nil {
 			c.nqosCache.Delete(key)
 			// we can ignore the error if status update doesn't succeed; best effort
 			c.updateNQOSStatusToNotReady(nqos.Namespace, nqos.Name, "failed to reconcile", err)
@@ -300,8 +292,7 @@ func (c *Controller) resyncPods(nqosState *networkQoSState) error {
 			return err
 		}
 	}
-	nqosState.cleanupStaleAddresses(addressSetMap)
-	return nil
+	return nqosState.cleanupStaleAddresses(addressSetMap)
 }
 
 var cudnController = udnv1.SchemeGroupVersion.WithKind("ClusterUserDefinedNetwork")
@@ -388,27 +379,16 @@ func (c *Controller) getNetAttachDefsBySelectors(namespaceSelector, nadSelector 
 	if err != nil {
 		return nil, fmt.Errorf("invalid network selector %v: %v", nadSelector.String(), err)
 	}
-	namespaces := []*corev1.Namespace{}
+	var selectedNads []*nadv1.NetworkAttachmentDefinition
 	if namespaceSelector != nil && namespaceSelector.Size() > 0 {
 		nsSelector, err := metav1.LabelSelectorAsSelector(namespaceSelector)
 		if err != nil {
 			return nil, fmt.Errorf("invalid namespace selector %v: %v", namespaceSelector.String(), err)
 		}
-		namespaces, err = c.nqosNamespaceLister.List(nsSelector)
+		namespaces, err := c.nqosNamespaceLister.List(nsSelector)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list namespaces: %v", err)
 		}
-	}
-
-	var selectedNads []*nadv1.NetworkAttachmentDefinition
-	if len(namespaces) == 0 {
-		// if namespace selector is empty, list NADs in all namespaces
-		nads, err := c.nadLister.List(nadSel)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list NADs: %v", err)
-		}
-		selectedNads = append(selectedNads, nads...)
-	} else {
 		for _, ns := range namespaces {
 			nads, err := c.nadLister.NetworkAttachmentDefinitions(ns.Name).List(nadSel)
 			if err != nil {
@@ -416,6 +396,12 @@ func (c *Controller) getNetAttachDefsBySelectors(namespaceSelector, nadSelector 
 			}
 			selectedNads = append(selectedNads, nads...)
 		}
+	} else {
+		nads, err := c.nadLister.List(nadSel)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list NADs: %v", err)
+		}
+		selectedNads = append(selectedNads, nads...)
 	}
 	return selectedNads, nil
 }

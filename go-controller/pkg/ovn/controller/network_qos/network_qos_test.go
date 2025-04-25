@@ -554,6 +554,31 @@ var _ = Describe("NetworkQoS Controller", func() {
 					eventuallyExpectNoQoS(defaultControllerName, nqosNamespace, "stream-qos", 0)
 				}
 
+				By("will not populate source address set NetworkQos with incorrect namespace selector in spec")
+				{
+					nqos4StreamNet.Spec.NetworkSelectors = []crdtypes.NetworkSelector{
+						{
+							NetworkSelectionType: crdtypes.NetworkAttachmentDefinitions,
+							NetworkAttachmentDefinitionSelector: &crdtypes.NetworkAttachmentDefinitionSelector{
+								NamespaceSelector: metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"name": "unknown",
+									},
+								},
+								NetworkSelector: metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"name": "stream",
+									},
+								},
+							},
+						},
+					}
+					nqos4StreamNet.ResourceVersion = time.Now().String()
+					_, err := fakeNQoSClient.K8sV1alpha1().NetworkQoSes(nqosNamespace).Update(context.TODO(), nqos4StreamNet, metav1.UpdateOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					eventuallyAddressSetHasNo(streamAddrsetFactory, nqosNamespace, "stream-qos", "src", "0", streamControllerName, "10.128.2.3")
+				}
+
 				By("handles NetworkQos on secondary network")
 				{
 					nqos4StreamNet.Spec.NetworkSelectors = []crdtypes.NetworkSelector{
