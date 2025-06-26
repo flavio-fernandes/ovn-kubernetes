@@ -1,0 +1,95 @@
+apiVersion: v1
+entries:
+  ovn-kubernetes:
+  - annotations:
+      default-values: values-no-ic.yaml
+    apiVersion: v2
+    appVersion: 1.1.0-latest
+    created: "2025-06-26T21:22:39.788942047Z"
+    dependencies:
+    - name: ovn-ipsec
+      repository: ""
+      tags:
+      - ovn-ipsec
+      version: 1.0.0
+    - name: ovnkube-control-plane
+      repository: ""
+      tags:
+      - ovnkube-control-plane
+      version: 1.0.0
+    - name: ovnkube-db
+      repository: ""
+      tags:
+      - ovnkube-db
+      version: 1.0.0
+    - name: ovnkube-db-raft
+      repository: ""
+      tags:
+      - ovnkube-db-raft
+      version: 1.0.0
+    - name: ovnkube-identity
+      repository: ""
+      tags:
+      - ovnkube-identity
+      version: 1.0.0
+    - name: ovnkube-master
+      repository: ""
+      tags:
+      - ovnkube-master
+      version: 1.0.0
+    - name: ovnkube-node
+      repository: ""
+      tags:
+      - ovnkube-node
+      version: 1.0.0
+    - name: ovnkube-node-dpu
+      repository: ""
+      tags:
+      - ovnkube-node-dpu
+      version: 1.0.0
+    - name: ovnkube-node-dpu-host
+      repository: ""
+      tags:
+      - ovnkube-node-dpu-host
+      version: 1.0.0
+    - name: ovnkube-single-node-zone
+      repository: ""
+      tags:
+      - ovnkube-single-node-zone
+      version: 1.0.0
+    - name: ovnkube-zone-controller
+      repository: ""
+      tags:
+      - ovnkube-zone-controller
+      version: 1.0.0
+    - name: ovs-node
+      repository: ""
+      tags:
+      - ovs-node
+      version: 1.0.0
+    description: Helm chart to deploy ovn-kubernetes cni
+    digest: 87b16eca547bb8eb0c70a216477bc882982594f9a8b075dda646f65d8785a980
+    home: https://ovn-kubernetes.io/
+    icon: https://www.ovn.org/images/ovn-logo.png
+    name: ovn-kubernetes
+    sources:
+    - https://github.com/ovn-org/ovn-kubernetes
+    - https://github.com/ovn-org/ovn
+    type: application
+    urls:
+    - https://github.com/flavio-fernandes/ovn-kubernetes/releases/download/ovn-kubernetes-1.1.0-alpha/ovn-kubernetes-1.1.0-alpha.tgz
+    version: 1.1.0-alpha
+  sdn-dashboard:
+  - apiVersion: v2
+    appVersion: 1.1.0-latest
+    created: "2025-06-26T21:22:40.029630643Z"
+    description: A Helm chart for sdn-dashboard
+    digest: c147aa477487e8a591b6ceb9475d5a9c779a48dfe8b94ef2bf29ec32d21b57cb
+    home: https://ovn-kubernetes.io/
+    name: sdn-dashboard
+    sources:
+    - https://github.com/ovn-kubernetes/ovn-kubernetes
+    urls:
+    - https://github.com/flavio-fernandes/ovn-kubernetes/releases/download/sdn-dashboard-1.1.0-alpha/sdn-dashboard-1.1.0-alpha.tgz
+    version: 1.1.0-alpha
+generated: "2025-06-26T21:22:40.029639329Z"
